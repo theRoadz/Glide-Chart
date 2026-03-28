@@ -1,5 +1,5 @@
 # generated: 2026-03-27
-# last_updated: 2026-03-28
+# last_updated: 2026-03-28T16:00:00
 # project: chartview
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-27
-last_updated: 2026-03-28
+last_updated: 2026-03-28T18:42:00
 project: chartview
 project_key: NOKEY
 tracking_system: file-system
@@ -49,7 +49,7 @@ development_status:
   1-3-monotone-cubic-interpolation-and-spline-cache: done
   1-4-coordinate-scale-and-viewport-mapping: done
   1-5-layered-canvas-and-frame-scheduler: done
-  1-6-config-system-and-beautiful-defaults: backlog
+  1-6-config-system-and-beautiful-defaults: done
   1-7-data-layer-rendering-smooth-curve-and-gradient-fill: backlog
   1-8-glidechart-public-api-facade: backlog
   epic-1-retrospective: optional
