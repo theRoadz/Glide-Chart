@@ -1,0 +1,102 @@
+# generated: 2026-03-27
+# last_updated: 2026-03-28
+# project: chartview
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-03-27
+last_updated: 2026-03-28
+project: chartview
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts"
+
+development_status:
+  # Epic 1: Project Foundation & First Smooth Curve (8 stories)
+  epic-1: in-progress
+  1-1-project-initialization-and-build-pipeline: done
+  1-2-core-data-types-and-ring-buffer: backlog
+  1-3-monotone-cubic-interpolation-and-spline-cache: backlog
+  1-4-coordinate-scale-and-viewport-mapping: backlog
+  1-5-layered-canvas-and-frame-scheduler: backlog
+  1-6-config-system-and-beautiful-defaults: backlog
+  1-7-data-layer-rendering-smooth-curve-and-gradient-fill: backlog
+  1-8-glidechart-public-api-facade: backlog
+  epic-1-retrospective: optional
+
+  # Epic 2: Axes, Scaling & Multi-Series (5 stories)
+  epic-2: backlog
+  2-1-background-layer-grid-lines: backlog
+  2-2-y-axis-with-auto-scaling-and-decimal-precision: backlog
+  2-3-x-axis-with-time-formatting-and-timezone-support: backlog
+  2-4-locale-aware-number-formatting: backlog
+  2-5-multi-series-rendering: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: Real-Time Streaming (4 stories)
+  epic-3: backlog
+  3-1-incremental-data-push-and-animation: backlog
+  3-2-configurable-visible-time-window-and-auto-scroll: backlog
+  3-3-websocket-data-feed-integration-pattern: backlog
+  3-4-stale-data-visual-indicator: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Interaction & Accessibility (6 stories)
+  epic-4: backlog
+  4-1-event-dispatcher-and-crosshair: backlog
+  4-2-tooltip-with-data-values: backlog
+  4-3-scroll-wheel-zoom: backlog
+  4-4-pinch-to-zoom-on-touch-devices: backlog
+  4-5-keyboard-navigation-and-accessibility: backlog
+  4-6-dataset-replace-clear-and-destroy-api: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: Theming & Customization (4 stories)
+  epic-5: backlog
+  5-1-light-and-dark-theme-presets: backlog
+  5-2-per-series-line-customization: backlog
+  5-3-grid-gradient-and-animation-customization: backlog
+  5-4-custom-tooltip-formatting: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: React Wrapper (2 stories)
+  epic-6: backlog
+  6-1-react-glidechart-component: backlog
+  6-2-react-streaming-and-event-props: backlog
+  epic-6-retrospective: optional
+
+  # Epic 7: Embeddable Widget & Distribution (2 stories)
+  epic-7: backlog
+  7-1-umd-widget-bundle-build: backlog
+  7-2-html-data-attribute-configuration-and-rendering: backlog
+  epic-7-retrospective: optional
