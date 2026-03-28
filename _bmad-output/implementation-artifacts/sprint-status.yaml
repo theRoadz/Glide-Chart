@@ -1,5 +1,5 @@
 # generated: 2026-03-27
-# last_updated: 2026-03-28T17:00:00
+# last_updated: 2026-03-28T20:45:00
 # project: chartview
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-27
-last_updated: 2026-03-28T19:50:00
+last_updated: 2026-03-28T20:45:00
 project: chartview
 project_key: NOKEY
 tracking_system: file-system
@@ -55,8 +55,8 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2: Axes, Scaling & Multi-Series (5 stories)
-  epic-2: backlog
-  2-1-background-layer-grid-lines: backlog
+  epic-2: in-progress
+  2-1-background-layer-grid-lines: done
   2-2-y-axis-with-auto-scaling-and-decimal-precision: backlog
   2-3-x-axis-with-time-formatting-and-timezone-support: backlog
   2-4-locale-aware-number-formatting: backlog

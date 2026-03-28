@@ -9,6 +9,7 @@ import { LayerType } from '../renderer/types';
 import { LayerManager } from '../renderer/layer-manager';
 import { FrameScheduler } from '../renderer/frame-scheduler';
 import { DataLayerRenderer } from '../renderer/layers/data-layer';
+import { BackgroundLayerRenderer } from '../renderer/layers/background-layer';
 import type { SeriesRenderData } from '../renderer/layers/data-layer';
 import type { GlideChartConfig } from './types';
 
@@ -58,6 +59,7 @@ export class GlideChart {
   private layerManager: LayerManager;
   private frameScheduler: FrameScheduler;
   private dataLayerRenderer: DataLayerRenderer;
+  private backgroundLayerRenderer: BackgroundLayerRenderer;
   private layers: Layer[];
 
   constructor(container: HTMLElement, config?: GlideChartConfig) {
@@ -122,9 +124,12 @@ export class GlideChart {
       this.buildSeriesRenderData(),
     );
 
-    // 8. Create Layer adapters
+    // 8. Create BackgroundLayerRenderer
     const bgCanvas = this.layerManager.getCanvas(LayerType.Background);
     const bgCtx = this.layerManager.getContext(LayerType.Background);
+    this.backgroundLayerRenderer = new BackgroundLayerRenderer(bgCtx, bgCanvas, this.scale, this.resolvedConfig);
+
+    // 9. Create Layer adapters
     const axisCanvas = this.layerManager.getCanvas(LayerType.Axis);
     const axisCtx = this.layerManager.getContext(LayerType.Axis);
     const interCanvas = this.layerManager.getCanvas(LayerType.Interaction);
@@ -132,7 +137,7 @@ export class GlideChart {
 
     this.layers = [
       createLayer(LayerType.Background, bgCanvas, bgCtx, () => {
-        bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+        this.backgroundLayerRenderer.draw();
       }),
       createLayer(LayerType.Axis, axisCanvas, axisCtx, () => {
         axisCtx.clearRect(0, 0, axisCanvas.width, axisCanvas.height);
@@ -152,6 +157,7 @@ export class GlideChart {
     }
     this.frameScheduler.start();
     this.frameScheduler.markDirty(LayerType.Data);
+    this.frameScheduler.markDirty(LayerType.Background);
     this.initialized = true;
   }
 
@@ -179,6 +185,7 @@ export class GlideChart {
     this.frameScheduler.markDirty(LayerType.Data);
     if (scaleChanged) {
       this.frameScheduler.markDirty(LayerType.Axis);
+      this.frameScheduler.markDirty(LayerType.Background);
     }
   }
 
@@ -196,6 +203,7 @@ export class GlideChart {
     this.autoFitScale();
     this.frameScheduler.markDirty(LayerType.Data);
     this.frameScheduler.markDirty(LayerType.Axis);
+    this.frameScheduler.markDirty(LayerType.Background);
   }
 
   clearData(seriesId?: string): void {
@@ -215,6 +223,7 @@ export class GlideChart {
     this.autoFitScale();
     this.frameScheduler.markDirty(LayerType.Data);
     this.frameScheduler.markDirty(LayerType.Axis);
+    this.frameScheduler.markDirty(LayerType.Background);
   }
 
   setConfig(partialConfig: ChartConfig): void {
@@ -248,6 +257,19 @@ export class GlideChart {
         state.splineCache.invalidate();
         this.seriesMap.delete(id);
       }
+    }
+
+    // Recreate BackgroundLayerRenderer with new config
+    const bgCtxNew = this.layerManager.getContext(LayerType.Background);
+    const bgCanvasNew = this.layerManager.getCanvas(LayerType.Background);
+    this.backgroundLayerRenderer = new BackgroundLayerRenderer(bgCtxNew, bgCanvasNew, this.scale, this.resolvedConfig);
+
+    // Update background layer draw callback
+    const bgLayer = this.layers.find((l) => l.type === LayerType.Background);
+    if (bgLayer) {
+      bgLayer.draw = () => {
+        this.backgroundLayerRenderer.draw();
+      };
     }
 
     // Recreate DataLayerRenderer with new configs
@@ -304,6 +326,7 @@ export class GlideChart {
     this.layers = [];
     this.scale = null!;
     this.dataLayerRenderer = null!;
+    this.backgroundLayerRenderer = null!;
     this.resolvedConfig = null!;
     this.userConfig = null!;
     this.layerManager = null!;

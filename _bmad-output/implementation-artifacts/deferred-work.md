@@ -26,3 +26,9 @@
 ## Deferred from: code review of 1-7-data-layer-rendering-smooth-curve-and-gradient-fill (2026-03-28)
 
 - **Performance test uses 500ms threshold instead of 16ms frame budget (AC4)** — Canvas mock overhead makes strict 16ms assertion unreliable. Spec allows deferral to Story 1.8 integration testing with real canvas rendering.
+
+## Deferred from: code review of 2-1-background-layer-grid-lines (2026-03-28)
+
+- **`niceNum()` produces tickSpacing=0 with subnormal float inputs** — `Math.log10()` on denormalized floats near `Number.MIN_VALUE` causes `Math.pow(10, exp)` to underflow to 0, producing tickSpacing=0. Scale guards against non-finite domains, making this unreachable in practice.
+- **0.5px crisp-line offset may not be pixel-perfect at dpr > 1** — The `Math.round(pixel) + 0.5` technique is correct for dpr=1 but produces slightly blurry lines at higher DPR. The correct offset at dpr=N is `0.5/N`. Pre-existing rendering pattern decision; may address in Story 5.3 (grid customization).
+- **`setData()` is non-atomic** — Buffer is cleared before all points are validated. If validation throws midway, partial data remains. Pre-existing in `glide-chart.ts`, not introduced by this story.
