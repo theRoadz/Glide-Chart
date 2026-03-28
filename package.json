@@ -33,9 +33,13 @@
   ],
   "sideEffects": false,
   "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "prepublishOnly": "pnpm build",
     "test": "vitest",
     "test:coverage": "vitest --coverage",
     "lint": "eslint src/",

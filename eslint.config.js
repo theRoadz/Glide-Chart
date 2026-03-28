@@ -27,4 +27,19 @@ export default [
       'no-unused-vars': 'off',
     },
   },
+  {
+    files: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    languageOptions: {
+      globals: {
+        describe: 'readonly',
+        it: 'readonly',
+        expect: 'readonly',
+        vi: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
+      },
+    },
+  },
 ]
