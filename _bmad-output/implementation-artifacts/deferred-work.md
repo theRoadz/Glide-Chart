@@ -22,3 +22,7 @@
 
 - ~~**Fractional DPR produces non-integer backing store dimensions**~~ — Fixed: `Math.round()` applied to backing store dimension calculations.
 - ~~**`_setupDprListener` leaks old MediaQueryList on rapid DPR changes**~~ — Fixed: previous listener is now removed before re-registering.
+
+## Deferred from: code review of 1-7-data-layer-rendering-smooth-curve-and-gradient-fill (2026-03-28)
+
+- **Performance test uses 500ms threshold instead of 16ms frame budget (AC4)** — Canvas mock overhead makes strict 16ms assertion unreliable. Spec allows deferral to Story 1.8 integration testing with real canvas rendering.
