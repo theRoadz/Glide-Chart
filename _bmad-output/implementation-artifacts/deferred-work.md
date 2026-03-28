@@ -32,3 +32,9 @@
 - **`niceNum()` produces tickSpacing=0 with subnormal float inputs** — `Math.log10()` on denormalized floats near `Number.MIN_VALUE` causes `Math.pow(10, exp)` to underflow to 0, producing tickSpacing=0. Scale guards against non-finite domains, making this unreachable in practice.
 - **0.5px crisp-line offset may not be pixel-perfect at dpr > 1** — The `Math.round(pixel) + 0.5` technique is correct for dpr=1 but produces slightly blurry lines at higher DPR. The correct offset at dpr=N is `0.5/N`. Pre-existing rendering pattern decision; may address in Story 5.3 (grid customization).
 - **`setData()` is non-atomic** — Buffer is cleared before all points are validated. If validation throws midway, partial data remains. Pre-existing in `glide-chart.ts`, not introduced by this story.
+
+## ~~Deferred from: code review of 2-2-y-axis-with-auto-scaling-and-decimal-precision (2026-03-28)~~
+
+- ~~**`labelFormatter` returning non-string has no runtime guard**~~ — Fixed: wrapped return in `String()` coercion
+- ~~**Long `labelFormatter` return value causes off-canvas label overflow**~~ — Fixed: added `maxWidth` parameter to `fillText`
+- **`setConfig()` layer `find` can silently fail leaving stale draw callback** — `this.layers.find(l => l.type === ...)` returns undefined silently if layer is missing. Pre-existing pattern across bg, axis, and data layers in `setConfig()`.

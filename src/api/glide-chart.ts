@@ -10,6 +10,7 @@ import { LayerManager } from '../renderer/layer-manager';
 import { FrameScheduler } from '../renderer/frame-scheduler';
 import { DataLayerRenderer } from '../renderer/layers/data-layer';
 import { BackgroundLayerRenderer } from '../renderer/layers/background-layer';
+import { YAxisRenderer } from '../renderer/layers/y-axis-layer';
 import type { SeriesRenderData } from '../renderer/layers/data-layer';
 import type { GlideChartConfig } from './types';
 
@@ -60,6 +61,7 @@ export class GlideChart {
   private frameScheduler: FrameScheduler;
   private dataLayerRenderer: DataLayerRenderer;
   private backgroundLayerRenderer: BackgroundLayerRenderer;
+  private yAxisRenderer: YAxisRenderer;
   private layers: Layer[];
 
   constructor(container: HTMLElement, config?: GlideChartConfig) {
@@ -129,9 +131,12 @@ export class GlideChart {
     const bgCtx = this.layerManager.getContext(LayerType.Background);
     this.backgroundLayerRenderer = new BackgroundLayerRenderer(bgCtx, bgCanvas, this.scale, this.resolvedConfig);
 
-    // 9. Create Layer adapters
+    // 9. Create YAxisRenderer
     const axisCanvas = this.layerManager.getCanvas(LayerType.Axis);
     const axisCtx = this.layerManager.getContext(LayerType.Axis);
+    this.yAxisRenderer = new YAxisRenderer(axisCtx, axisCanvas, this.scale, this.resolvedConfig);
+
+    // 10. Create Layer adapters
     const interCanvas = this.layerManager.getCanvas(LayerType.Interaction);
     const interCtx = this.layerManager.getContext(LayerType.Interaction);
 
@@ -141,6 +146,7 @@ export class GlideChart {
       }),
       createLayer(LayerType.Axis, axisCanvas, axisCtx, () => {
         axisCtx.clearRect(0, 0, axisCanvas.width, axisCanvas.height);
+        this.yAxisRenderer.draw();
       }),
       createLayer(LayerType.Data, dataCanvas, dataCtx, () => {
         this.dataLayerRenderer.draw();
@@ -272,6 +278,20 @@ export class GlideChart {
       };
     }
 
+    // Recreate YAxisRenderer with new config
+    const axisCtxNew = this.layerManager.getContext(LayerType.Axis);
+    const axisCanvasNew = this.layerManager.getCanvas(LayerType.Axis);
+    this.yAxisRenderer = new YAxisRenderer(axisCtxNew, axisCanvasNew, this.scale, this.resolvedConfig);
+
+    // Update axis layer draw callback
+    const axisLayer = this.layers.find((l) => l.type === LayerType.Axis);
+    if (axisLayer) {
+      axisLayer.draw = () => {
+        axisCtxNew.clearRect(0, 0, axisCanvasNew.width, axisCanvasNew.height);
+        this.yAxisRenderer.draw();
+      };
+    }
+
     // Recreate DataLayerRenderer with new configs
     const dataCtx = this.layerManager.getContext(LayerType.Data);
     const dataCanvas = this.layerManager.getCanvas(LayerType.Data);
@@ -327,6 +347,7 @@ export class GlideChart {
     this.scale = null!;
     this.dataLayerRenderer = null!;
     this.backgroundLayerRenderer = null!;
+    this.yAxisRenderer = null!;
     this.resolvedConfig = null!;
     this.userConfig = null!;
     this.layerManager = null!;

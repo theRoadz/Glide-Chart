@@ -36,6 +36,7 @@ export interface AxisConfig {
   labelFontFamily: string;
   tickColor: string;
   tickLength: number;
+  labelFormatter?: (value: number) => string;
 }
 
 export interface CrosshairConfig {
