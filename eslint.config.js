@@ -15,6 +15,22 @@ export default [
         ecmaVersion: 2020,
         sourceType: 'module',
       },
+      globals: {
+        // Browser globals (Canvas 2D rendering library)
+        window: 'readonly',
+        document: 'readonly',
+        HTMLElement: 'readonly',
+        HTMLCanvasElement: 'readonly',
+        CanvasRenderingContext2D: 'readonly',
+        ResizeObserver: 'readonly',
+        ResizeObserverCallback: 'readonly',
+        MediaQueryList: 'readonly',
+        requestAnimationFrame: 'readonly',
+        cancelAnimationFrame: 'readonly',
+        getComputedStyle: 'readonly',
+        performance: 'readonly',
+        FrameRequestCallback: 'readonly',
+      },
     },
     plugins: {
       '@typescript-eslint': tseslint,

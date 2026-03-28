@@ -11,9 +11,14 @@
 - ~~**No validation that `TimeRange.start <= end`**~~ — Resolved: inverted range returns empty array by design. Test added to document this behavior.
 - ~~**Missing test for `getVisibleWindow` with inverted TimeRange**~~ — Fixed: added test confirming empty array for start > end.
 
-## Deferred from: code review of 1-4-coordinate-scale-and-viewport-mapping (2026-03-28)
+## ~~Deferred from: code review of 1-4-coordinate-scale-and-viewport-mapping (2026-03-28)~~
 
-- **No NaN/Infinity guard on constructor/validateDimensions** — NaN passes `<= 0` checks silently; Infinity produces nonsensical viewport. Systemic input validation pattern applies across entire codebase.
-- **No NaN/Infinity guard on setDomainX/setDomainY** — NaN inputs produce NaN inverse, poisoning all mappings. Same systemic pattern.
-- **autoFitX/Y corrupted by NaN in iterable** — NaN sets `hasValues=true` without updating min/max, leaving Infinity/-Infinity domain. Same systemic pattern.
-- **autoFitX/Y corrupted by Infinity in iterable** — `Infinity - Infinity = NaN` for range, producing NaN domain. Same systemic pattern.
+- ~~**No NaN/Infinity guard on constructor/validateDimensions**~~ — Fixed: `validateDimensions` now uses `Number.isFinite()` checks for canvasWidth, canvasHeight, dpr, and padding values.
+- ~~**No NaN/Infinity guard on setDomainX/setDomainY**~~ — Fixed: both methods now throw on NaN/Infinity inputs.
+- ~~**autoFitX/Y corrupted by NaN in iterable**~~ — Fixed: non-finite values are skipped via `Number.isFinite()` filter.
+- ~~**autoFitX/Y corrupted by Infinity in iterable**~~ — Fixed: same `Number.isFinite()` filter handles Infinity.
+
+## ~~Deferred from: code review of 1-5-layered-canvas-and-frame-scheduler (2026-03-28)~~
+
+- ~~**Fractional DPR produces non-integer backing store dimensions**~~ — Fixed: `Math.round()` applied to backing store dimension calculations.
+- ~~**`_setupDprListener` leaks old MediaQueryList on rapid DPR changes**~~ — Fixed: previous listener is now removed before re-registering.

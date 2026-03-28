@@ -43,6 +43,9 @@ export class Scale {
   }
 
   setDomainX(min: number, max: number): void {
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+      throw new Error('Scale: domain X values must be finite numbers');
+    }
     if (min > max) {
       const tmp = min;
       min = max;
@@ -53,6 +56,9 @@ export class Scale {
   }
 
   setDomainY(min: number, max: number): void {
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+      throw new Error('Scale: domain Y values must be finite numbers');
+    }
     if (min > max) {
       const tmp = min;
       min = max;
@@ -68,6 +74,7 @@ export class Scale {
     let hasValues = false;
 
     for (const t of timestamps) {
+      if (!Number.isFinite(t)) continue;
       hasValues = true;
       if (t < min) min = t;
       if (t > max) max = t;
@@ -93,6 +100,7 @@ export class Scale {
     let hasValues = false;
 
     for (const v of values) {
+      if (!Number.isFinite(v)) continue;
       hasValues = true;
       if (v < min) min = v;
       if (v > max) max = v;
@@ -141,9 +149,12 @@ export class Scale {
   }
 
   private static validateDimensions(canvasWidth: number, canvasHeight: number, dpr: number, padding: Padding): void {
-    if (canvasWidth <= 0) throw new Error('Scale: canvasWidth must be positive');
-    if (canvasHeight <= 0) throw new Error('Scale: canvasHeight must be positive');
-    if (dpr <= 0) throw new Error('Scale: dpr must be positive');
+    if (!Number.isFinite(canvasWidth) || canvasWidth <= 0) throw new Error('Scale: canvasWidth must be a finite positive number');
+    if (!Number.isFinite(canvasHeight) || canvasHeight <= 0) throw new Error('Scale: canvasHeight must be a finite positive number');
+    if (!Number.isFinite(dpr) || dpr <= 0) throw new Error('Scale: dpr must be a finite positive number');
+    if (!Number.isFinite(padding.top) || !Number.isFinite(padding.right) || !Number.isFinite(padding.bottom) || !Number.isFinite(padding.left)) {
+      throw new Error('Scale: padding values must be finite numbers');
+    }
     if (padding.top < 0 || padding.right < 0 || padding.bottom < 0 || padding.left < 0) {
       throw new Error('Scale: padding values must be non-negative');
     }

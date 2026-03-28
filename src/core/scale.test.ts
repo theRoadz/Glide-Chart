@@ -41,18 +41,33 @@ describe('Scale', () => {
 
   describe('input validation', () => {
     it('throws on non-positive canvasWidth', () => {
-      expect(() => new Scale(makeOptions({ canvasWidth: 0 }))).toThrow('Scale: canvasWidth must be positive');
-      expect(() => new Scale(makeOptions({ canvasWidth: -1 }))).toThrow('Scale: canvasWidth must be positive');
+      expect(() => new Scale(makeOptions({ canvasWidth: 0 }))).toThrow('Scale: canvasWidth must be a finite positive number');
+      expect(() => new Scale(makeOptions({ canvasWidth: -1 }))).toThrow('Scale: canvasWidth must be a finite positive number');
+    });
+
+    it('throws on NaN/Infinity canvasWidth', () => {
+      expect(() => new Scale(makeOptions({ canvasWidth: NaN }))).toThrow('Scale: canvasWidth must be a finite positive number');
+      expect(() => new Scale(makeOptions({ canvasWidth: Infinity }))).toThrow('Scale: canvasWidth must be a finite positive number');
     });
 
     it('throws on non-positive canvasHeight', () => {
-      expect(() => new Scale(makeOptions({ canvasHeight: 0 }))).toThrow('Scale: canvasHeight must be positive');
-      expect(() => new Scale(makeOptions({ canvasHeight: -5 }))).toThrow('Scale: canvasHeight must be positive');
+      expect(() => new Scale(makeOptions({ canvasHeight: 0 }))).toThrow('Scale: canvasHeight must be a finite positive number');
+      expect(() => new Scale(makeOptions({ canvasHeight: -5 }))).toThrow('Scale: canvasHeight must be a finite positive number');
+    });
+
+    it('throws on NaN/Infinity canvasHeight', () => {
+      expect(() => new Scale(makeOptions({ canvasHeight: NaN }))).toThrow('Scale: canvasHeight must be a finite positive number');
+      expect(() => new Scale(makeOptions({ canvasHeight: Infinity }))).toThrow('Scale: canvasHeight must be a finite positive number');
     });
 
     it('throws on non-positive dpr', () => {
-      expect(() => new Scale(makeOptions({ dpr: 0 }))).toThrow('Scale: dpr must be positive');
-      expect(() => new Scale(makeOptions({ dpr: -1 }))).toThrow('Scale: dpr must be positive');
+      expect(() => new Scale(makeOptions({ dpr: 0 }))).toThrow('Scale: dpr must be a finite positive number');
+      expect(() => new Scale(makeOptions({ dpr: -1 }))).toThrow('Scale: dpr must be a finite positive number');
+    });
+
+    it('throws on NaN/Infinity dpr', () => {
+      expect(() => new Scale(makeOptions({ dpr: NaN }))).toThrow('Scale: dpr must be a finite positive number');
+      expect(() => new Scale(makeOptions({ dpr: Infinity }))).toThrow('Scale: dpr must be a finite positive number');
     });
 
     it('throws on negative padding values', () => {
@@ -188,6 +203,20 @@ describe('Scale', () => {
       scale.autoFitY([7, 7, 7, 7]);
       expect(scale.domainY).toEqual({ min: 6, max: 8 });
     });
+
+    it('skips NaN and Infinity values', () => {
+      const scale = new Scale(makeOptions());
+      scale.autoFitY([NaN, 10, Infinity, 50, -Infinity]);
+      // range = 40, padding = 4 each side
+      expect(scale.domainY.min).toBeCloseTo(6, 10);
+      expect(scale.domainY.max).toBeCloseTo(54, 10);
+    });
+
+    it('with only NaN/Infinity values defaults to domain 0-1', () => {
+      const scale = new Scale(makeOptions());
+      scale.autoFitY([NaN, Infinity, -Infinity]);
+      expect(scale.domainY).toEqual({ min: 0, max: 1 });
+    });
   });
 
   describe('autoFitX', () => {
@@ -213,6 +242,18 @@ describe('Scale', () => {
       const scale = new Scale(makeOptions());
       scale.autoFitX([1000, 1000, 1000]);
       expect(scale.domainX).toEqual({ min: 999, max: 1001 });
+    });
+
+    it('skips NaN and Infinity values', () => {
+      const scale = new Scale(makeOptions());
+      scale.autoFitX([NaN, 100, Infinity, 200, -Infinity, 300]);
+      expect(scale.domainX).toEqual({ min: 100, max: 300 });
+    });
+
+    it('with only NaN/Infinity values defaults to domain 0-1', () => {
+      const scale = new Scale(makeOptions());
+      scale.autoFitX([NaN, Infinity, -Infinity]);
+      expect(scale.domainX).toEqual({ min: 0, max: 1 });
     });
   });
 
@@ -256,6 +297,20 @@ describe('Scale', () => {
       const scale = new Scale(makeOptions());
       scale.setDomainY(50, -50);
       expect(scale.domainY).toEqual({ min: -50, max: 50 });
+    });
+
+    it('setDomainX throws on NaN or Infinity', () => {
+      const scale = new Scale(makeOptions());
+      expect(() => scale.setDomainX(NaN, 100)).toThrow('Scale: domain X values must be finite numbers');
+      expect(() => scale.setDomainX(0, Infinity)).toThrow('Scale: domain X values must be finite numbers');
+      expect(() => scale.setDomainX(-Infinity, 100)).toThrow('Scale: domain X values must be finite numbers');
+    });
+
+    it('setDomainY throws on NaN or Infinity', () => {
+      const scale = new Scale(makeOptions());
+      expect(() => scale.setDomainY(NaN, 100)).toThrow('Scale: domain Y values must be finite numbers');
+      expect(() => scale.setDomainY(0, Infinity)).toThrow('Scale: domain Y values must be finite numbers');
+      expect(() => scale.setDomainY(-Infinity, 100)).toThrow('Scale: domain Y values must be finite numbers');
     });
   });
 
