@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GlideChart — Developer Demo</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --text: #e0e0e0;
+      --text-muted: #8a8a9a;
+      --btn-bg: #1a1a2e;
+      --btn-text: #e0e0e0;
+      --btn-border: #3a3a4a;
+      --btn-hover: #2a2a3e;
+      --btn-disabled: #111118;
+      --btn-disabled-text: #4a4a5a;
+      --accent: #00d4aa;
+    }
+
+    body.light {
+      --bg: #f5f5f5;
+      --surface: #ffffff;
+      --text: #333333;
+      --text-muted: #777777;
+      --btn-bg: #e8e8e8;
+      --btn-text: #333333;
+      --btn-border: #cccccc;
+      --btn-hover: #d8d8d8;
+      --btn-disabled: #f0f0f0;
+      --btn-disabled-text: #aaaaaa;
+      --accent: #0066cc;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+
+    .header {
+      padding: 16px 24px 8px;
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .header .subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .controls {
+      padding: 8px 24px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .controls button {
+      padding: 8px 16px;
+      border: 1px solid var(--btn-border);
+      border-radius: 6px;
+      background: var(--btn-bg);
+      color: var(--btn-text);
+      font-size: 13px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+
+    .controls button:hover:not(:disabled) {
+      background: var(--btn-hover);
+    }
+
+    .controls button:disabled {
+      background: var(--btn-disabled);
+      color: var(--btn-disabled-text);
+      cursor: not-allowed;
+      border-color: var(--btn-disabled);
+    }
+
+    .controls button.active {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .divider {
+      width: 1px;
+      height: 24px;
+      background: var(--btn-border);
+      margin: 0 4px;
+    }
+
+    .status {
+      padding: 0 24px 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      gap: 24px;
+    }
+
+    .status span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+
+    .status .dot.active {
+      background: var(--accent);
+    }
+
+    #chart-container {
+      flex: 1;
+      margin: 0 24px 24px;
+      border-radius: 8px;
+      background: var(--surface);
+      min-height: 400px;
+      position: relative;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>GlideChart</h1>
+    <span class="subtitle">Developer Demo — Epic 1 Visual Verification</span>
+  </div>
+
+  <div class="controls">
+    <button id="btn-stream">Start Streaming</button>
+    <button id="btn-theme">Toggle Theme</button>
+    <div class="divider"></div>
+    <button id="btn-clear">Clear Data</button>
+    <button id="btn-random">New Random Data</button>
+    <div class="divider"></div>
+    <button id="btn-destroy">Destroy</button>
+  </div>
+
+  <div class="status">
+    <span>Theme: <strong id="status-theme">Dark</strong></span>
+    <span><span class="dot" id="status-dot"></span> Streaming: <strong id="status-stream">Stopped</strong></span>
+    <span>Points: <strong id="status-points">0</strong></span>
+  </div>
+
+  <div id="chart-container"></div>
+
+  <script type="module">
+    import { GlideChart, ThemeMode } from '../dist/index.js';
+
+    // --- Data generation ---
+
+    function gaussianRandom() {
+      let sum = 0;
+      for (let i = 0; i < 6; i++) sum += Math.random();
+      return sum - 3;
+    }
+
+    function generatePriceData(count, startTimestamp, startPrice) {
+      const points = [];
+      let price = startPrice;
+      const drift = 0.05;
+      const volatility = 1.5;
+      for (let i = 0; i < count; i++) {
+        price += drift + volatility * gaussianRandom();
+        if (price < 1) price = 1 + Math.random() * 2;
+        points.push({
+          timestamp: startTimestamp + i * 1000,
+          value: price,
+        });
+      }
+      return points;
+    }
+
+    function generateVolumeData(count, startTimestamp) {
+      const points = [];
+      let vol = 50;
+      for (let i = 0; i < count; i++) {
+        vol = Math.abs(50 + 15 * gaussianRandom());
+        if (Math.random() < 0.1) vol *= 2 + Math.random();
+        points.push({
+          timestamp: startTimestamp + i * 1000,
+          value: vol,
+        });
+      }
+      return points;
+    }
+
+    // --- State ---
+
+    let chart = null;
+    let currentTheme = ThemeMode.Dark;
+    let streamingInterval = null;
+    let isStreaming = false;
+    let pointCount = 200;
+    let lastTimestamp = 0;
+    let lastPrice = 100;
+    let lastVolume = 50;
+
+    // --- DOM refs ---
+
+    const container = document.getElementById('chart-container');
+    const btnStream = document.getElementById('btn-stream');
+    const btnTheme = document.getElementById('btn-theme');
+    const btnClear = document.getElementById('btn-clear');
+    const btnRandom = document.getElementById('btn-random');
+    const btnDestroy = document.getElementById('btn-destroy');
+    const statusTheme = document.getElementById('status-theme');
+    const statusStream = document.getElementById('status-stream');
+    const statusPoints = document.getElementById('status-points');
+    const statusDot = document.getElementById('status-dot');
+
+    // --- Status update ---
+
+    function updateStatus() {
+      statusTheme.textContent = currentTheme === ThemeMode.Dark ? 'Dark' : 'Light';
+      statusStream.textContent = isStreaming ? 'Active' : 'Stopped';
+      statusDot.classList.toggle('active', isStreaming);
+      statusPoints.textContent = pointCount.toString();
+    }
+
+    // --- Chart creation ---
+
+    function createChart() {
+      const startTimestamp = Date.now() - 200 * 1000;
+      const priceData = generatePriceData(200, startTimestamp, 100);
+      const volumeData = generateVolumeData(200, startTimestamp);
+
+      lastTimestamp = startTimestamp + 199 * 1000;
+      lastPrice = priceData[priceData.length - 1].value;
+      lastVolume = volumeData[volumeData.length - 1].value;
+      pointCount = 200;
+
+      chart = new GlideChart(container, {
+        theme: currentTheme,
+        series: [
+          {
+            id: 'price',
+            data: priceData,
+            line: { color: '#00d4aa', width: 2 },
+            gradient: { enabled: true, topColor: '#00d4aa', bottomColor: '#00d4aa', topOpacity: 0.3, bottomOpacity: 0 },
+          },
+          {
+            id: 'volume',
+            data: volumeData,
+            line: { color: '#ff8c42', width: 1.5 },
+            gradient: { enabled: true, topColor: '#ff8c42', bottomColor: '#ff8c42', topOpacity: 0.15, bottomOpacity: 0 },
+          },
+        ],
+      });
+
+      updateStatus();
+    }
+
+    // --- Button handlers ---
+
+    function setButtonsEnabled(enabled) {
+      btnStream.disabled = !enabled;
+      btnTheme.disabled = !enabled;
+      btnClear.disabled = !enabled;
+      btnRandom.disabled = !enabled;
+    }
+
+    btnStream.addEventListener('click', () => {
+      if (isStreaming) {
+        clearInterval(streamingInterval);
+        streamingInterval = null;
+        isStreaming = false;
+        btnStream.textContent = 'Start Streaming';
+        btnStream.classList.remove('active');
+      } else {
+        isStreaming = true;
+        btnStream.textContent = 'Stop Streaming';
+        btnStream.classList.add('active');
+        streamingInterval = setInterval(() => {
+          if (!chart) return;
+
+          lastTimestamp += 1000;
+          lastPrice += 0.05 + 1.5 * gaussianRandom();
+          if (lastPrice < 1) lastPrice = 1 + Math.random() * 2;
+          lastVolume = Math.abs(50 + 15 * gaussianRandom());
+          if (Math.random() < 0.1) lastVolume *= 2 + Math.random();
+
+          chart.addData('price', { timestamp: lastTimestamp, value: lastPrice });
+          chart.addData('volume', { timestamp: lastTimestamp, value: lastVolume });
+
+          pointCount = Math.min(pointCount + 1, 10000);
+          updateStatus();
+        }, 60);
+      }
+      updateStatus();
+    });
+
+    btnTheme.addEventListener('click', () => {
+      currentTheme = currentTheme === ThemeMode.Dark ? ThemeMode.Light : ThemeMode.Dark;
+      document.body.classList.toggle('light', currentTheme === ThemeMode.Light);
+      if (chart) {
+        chart.setConfig({ theme: currentTheme });
+      }
+      updateStatus();
+    });
+
+    btnClear.addEventListener('click', () => {
+      if (!chart) return;
+
+      // Stop streaming if active
+      if (isStreaming) {
+        clearInterval(streamingInterval);
+        streamingInterval = null;
+        isStreaming = false;
+        btnStream.textContent = 'Start Streaming';
+        btnStream.classList.remove('active');
+      }
+
+      chart.clearData();
+      pointCount = 0;
+      lastTimestamp = Date.now();
+      lastPrice = 100;
+      lastVolume = 50;
+      updateStatus();
+    });
+
+    btnRandom.addEventListener('click', () => {
+      if (!chart) return;
+      const startTimestamp = Date.now() - 200 * 1000;
+      const priceData = generatePriceData(200, startTimestamp, 80 + Math.random() * 40);
+      const volumeData = generateVolumeData(200, startTimestamp);
+
+      chart.setData('price', priceData);
+      chart.setData('volume', volumeData);
+
+      lastTimestamp = startTimestamp + 199 * 1000;
+      lastPrice = priceData[priceData.length - 1].value;
+      lastVolume = volumeData[volumeData.length - 1].value;
+      pointCount = 200;
+      updateStatus();
+    });
+
+    btnDestroy.addEventListener('click', () => {
+      if (chart) {
+        // Stop streaming first
+        if (isStreaming) {
+          clearInterval(streamingInterval);
+          streamingInterval = null;
+          isStreaming = false;
+          btnStream.textContent = 'Start Streaming';
+          btnStream.classList.remove('active');
+        }
+
+        chart.destroy();
+        chart = null;
+        btnDestroy.textContent = 'Recreate';
+        setButtonsEnabled(false);
+        pointCount = 0;
+        updateStatus();
+      } else {
+        createChart();
+        btnDestroy.textContent = 'Destroy';
+        setButtonsEnabled(true);
+        updateStatus();
+      }
+    });
+
+    // --- Init ---
+
+    createChart();
+  </script>
+</body>
+</html>
