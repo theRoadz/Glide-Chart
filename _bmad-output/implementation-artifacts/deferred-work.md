@@ -47,3 +47,8 @@
 ## ~~Deferred from: code review of 2-4-locale-aware-number-formatting (2026-03-29)~~
 
 - ~~**x-axis `DateTimeFormat` ignores `config.xAxis.locale`**~~ — Fixed: wired `config.xAxis.locale` into all three `DateTimeFormat` constructors with locale validation.
+
+## ~~Deferred from: code review of 2-5-multi-series-rendering (2026-03-29)~~
+
+- ~~**`setConfig` ignores `data` arrays on new series entries (silent data loss)**~~ — Fixed: `setConfig` now populates buffer from `userConfig.series[].data` for new series.
+- ~~**Demo `multiChart` excluded from streaming/clear/random button flows**~~ — Fixed: clear and random buttons now sync multiChart.

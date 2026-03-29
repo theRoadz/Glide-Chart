@@ -68,6 +68,15 @@
       color: var(--text-muted);
     }
 
+    .section-label {
+      padding: 8px 24px 4px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
     .controls {
       padding: 8px 24px 16px;
       display: flex;
@@ -136,12 +145,21 @@
       background: var(--accent);
     }
 
-    #chart-container {
+    .charts-area {
       flex: 1;
-      margin: 0 24px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 0 24px 24px;
+      min-height: 0;
+      overflow: auto;
+    }
+
+    .chart-wrapper {
+      flex: 1;
       border-radius: 8px;
       background: var(--surface);
-      min-height: 400px;
+      min-height: 300px;
       position: relative;
       overflow: hidden;
     }
@@ -150,7 +168,7 @@
 <body>
   <div class="header">
     <h1>GlideChart</h1>
-    <span class="subtitle">Developer Demo — Epic 1 Visual Verification</span>
+    <span class="subtitle">Developer Demo — Epic 2 Visual Verification</span>
   </div>
 
   <div class="controls">
@@ -169,7 +187,12 @@
     <span>Points: <strong id="status-points">0</strong></span>
   </div>
 
-  <div id="chart-container"></div>
+  <div class="charts-area">
+    <div class="section-label">Single-Series (Price + Volume)</div>
+    <div id="chart-container" class="chart-wrapper"></div>
+    <div class="section-label">Multi-Series (Price + Reference Line)</div>
+    <div id="chart-multi" class="chart-wrapper"></div>
+  </div>
 
   <script type="module">
     import { GlideChart, ThemeMode } from '../dist/index.js';
@@ -339,6 +362,9 @@
       }
 
       chart.clearData();
+      if (multiChart) {
+        multiChart.clearData();
+      }
       pointCount = 0;
       lastTimestamp = Date.now();
       lastPrice = 100;
@@ -354,6 +380,17 @@
 
       chart.setData('price', priceData);
       chart.setData('volume', volumeData);
+
+      if (multiChart) {
+        const multiPrice = generatePriceData(200, startTimestamp, 80 + Math.random() * 40);
+        const openingPrice = multiPrice[0].value;
+        const refData = [];
+        for (let i = 0; i < 200; i++) {
+          refData.push({ timestamp: startTimestamp + i * 1000, value: openingPrice + Math.sin(i * 0.02) * 2 });
+        }
+        multiChart.setData('price', multiPrice);
+        multiChart.setData('reference', refData);
+      }
 
       lastTimestamp = startTimestamp + 199 * 1000;
       lastPrice = priceData[priceData.length - 1].value;
@@ -375,21 +412,71 @@
 
         chart.destroy();
         chart = null;
+        if (multiChart) {
+          multiChart.destroy();
+          multiChart = null;
+        }
         btnDestroy.textContent = 'Recreate';
         setButtonsEnabled(false);
         pointCount = 0;
         updateStatus();
       } else {
         createChart();
+        createMultiChart();
         btnDestroy.textContent = 'Destroy';
         setButtonsEnabled(true);
         updateStatus();
       }
     });
 
+    // --- Multi-series chart (price + reference line) ---
+
+    const multiContainer = document.getElementById('chart-multi');
+    let multiChart = null;
+
+    function createMultiChart() {
+      const startTimestamp = Date.now() - 200 * 1000;
+      const priceData = generatePriceData(200, startTimestamp, 100);
+      // Reference line: flat opening price with slight drift
+      const openingPrice = priceData[0].value;
+      const referenceData = [];
+      for (let i = 0; i < 200; i++) {
+        referenceData.push({
+          timestamp: startTimestamp + i * 1000,
+          value: openingPrice + Math.sin(i * 0.02) * 2,
+        });
+      }
+
+      multiChart = new GlideChart(multiContainer, {
+        theme: currentTheme,
+        series: [
+          {
+            id: 'reference',
+            data: referenceData,
+            line: { color: '#ff6b6b', width: 1.5 },
+            gradient: { enabled: false },
+          },
+          {
+            id: 'price',
+            data: priceData,
+            line: { color: '#00d4aa', width: 2 },
+            gradient: { enabled: true, topColor: '#00d4aa', bottomColor: '#00d4aa', topOpacity: 0.3, bottomOpacity: 0 },
+          },
+        ],
+      });
+    }
+
+    // Sync theme toggle with multi-series chart
+    btnTheme.addEventListener('click', () => {
+      if (multiChart) {
+        multiChart.setConfig({ theme: currentTheme });
+      }
+    });
+
     // --- Init ---
 
     createChart();
+    createMultiChart();
   </script>
 </body>
 </html>

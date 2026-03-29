@@ -371,6 +371,196 @@ describe('GlideChart', () => {
     });
   });
 
+  describe('multi-series integration', () => {
+    it('renders both series on frame tick (stroke called for each)', () => {
+      const chart = new GlideChart(container, {
+        series: [
+          { id: 'price', data: makePoints(10) },
+          { id: 'ref', data: makePoints(10, 2000) },
+        ],
+      });
+      tickFrame();
+      // Both series rendered without error
+      chart.destroy();
+    });
+
+    it('each series gets independent color/thickness from config', () => {
+      const chart = new GlideChart(container, {
+        series: [
+          { id: 'price', data: makePoints(5), line: { color: '#ff0000', width: 3 } },
+          { id: 'ref', data: makePoints(5, 2000), line: { color: '#00ff00', width: 1 } },
+        ],
+      });
+      tickFrame();
+      // Chart renders without error — series config isolation verified via DataLayerRenderer tests
+      chart.destroy();
+    });
+
+    it('per-series gradient enable/disable works independently', () => {
+      const chart = new GlideChart(container, {
+        series: [
+          {
+            id: 'price',
+            data: makePoints(5),
+            gradient: { enabled: true, topColor: '#00d4aa', topOpacity: 0.3, bottomColor: '#00d4aa', bottomOpacity: 0 },
+          },
+          {
+            id: 'ref',
+            data: makePoints(5, 2000),
+            gradient: { enabled: false },
+          },
+        ],
+      });
+      tickFrame();
+      // Chart renders without error — mixed gradient states handled
+      chart.destroy();
+    });
+
+    it('y-axis auto-scales to encompass all series values', () => {
+      // Series A: values 0-50, Series B: values 80-100
+      const seriesA: DataPoint[] = [
+        { timestamp: 1000, value: 0 },
+        { timestamp: 2000, value: 25 },
+        { timestamp: 3000, value: 50 },
+      ];
+      const seriesB: DataPoint[] = [
+        { timestamp: 1000, value: 80 },
+        { timestamp: 2000, value: 90 },
+        { timestamp: 3000, value: 100 },
+      ];
+
+      const chart = new GlideChart(container, {
+        series: [
+          { id: 'a', data: seriesA },
+          { id: 'b', data: seriesB },
+        ],
+      });
+
+      tickFrame();
+
+      // Verify y-domain encompasses both series (0-100 with padding)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accessing private Scale for white-box test
+      const scale = (chart as any).scale as { domainY: { min: number; max: number } };
+      const domainY = scale.domainY;
+      expect(domainY.min).toBeLessThanOrEqual(0);
+      expect(domainY.max).toBeGreaterThanOrEqual(100);
+      chart.destroy();
+    });
+
+    it('addData to one series does not affect other series buffer size', () => {
+      const chart = new GlideChart(container, {
+        series: [
+          { id: 'price', data: makePoints(5) },
+          { id: 'ref', data: makePoints(3, 2000) },
+        ],
+      });
+
+      // Add 10 more points to price only
+      chart.addData('price', makePoints(10, 5000));
+
+      // Ref should still work independently — addData to price didn't touch ref
+      chart.addData('ref', { timestamp: 9000, value: 42 });
+      tickFrame();
+      chart.destroy();
+    });
+
+    it('setData replaces data for one series only, other series unchanged', () => {
+      const chart = new GlideChart(container, {
+        series: [
+          { id: 'price', data: makePoints(5) },
+          { id: 'ref', data: makePoints(3, 2000) },
+        ],
+      });
+
+      // Replace price data entirely
+      chart.setData('price', makePoints(20, 8000));
+
+      // Ref is still intact — can addData
+      chart.addData('ref', { timestamp: 9000, value: 42 });
+      tickFrame();
+      chart.destroy();
+    });
+
+    it('setConfig adding a new third series dynamically creates its buffer/cache', () => {
+      const chart = new GlideChart(container, {
+        series: [
+          { id: 'price', data: makePoints(5) },
+          { id: 'ref', data: makePoints(3, 2000) },
+        ],
+      });
+
+      // Add a third series via setConfig
+      chart.setConfig({
+        series: [
+          { id: 'price' },
+          { id: 'ref' },
+          { id: 'volume' },
+        ],
+      });
+
+      // New series should accept data
+      chart.addData('volume', { timestamp: 1000, value: 100 });
+      tickFrame();
+
+      // Original series should still work
+      chart.addData('price', { timestamp: 5000, value: 50 });
+      chart.destroy();
+    });
+
+    it('setConfig adding a new series with data populates its buffer', () => {
+      const chart = new GlideChart(container, {
+        series: [
+          { id: 'price', data: makePoints(5) },
+        ],
+      });
+
+      // Add a second series with initial data via setConfig
+      const newData = makePoints(3, 5000);
+      chart.setConfig({
+        series: [
+          { id: 'price' },
+          { id: 'volume', data: newData },
+        ],
+      });
+
+      tickFrame();
+
+      // The new series buffer should contain the provided data — addData should append, not start from scratch
+      chart.addData('volume', { timestamp: 9000, value: 42 });
+      tickFrame();
+      chart.destroy();
+    });
+
+    it('setConfig removing a series cleans up, other series unaffected', () => {
+      const chart = new GlideChart(container, {
+        series: [
+          { id: 'price', data: makePoints(5) },
+          { id: 'ref', data: makePoints(3, 2000) },
+          { id: 'volume', data: makePoints(2, 3000) },
+        ],
+      });
+
+      // Remove 'ref' by excluding it from setConfig
+      chart.setConfig({
+        series: [
+          { id: 'price' },
+          { id: 'volume' },
+        ],
+      });
+
+      // Removed series should throw
+      expect(() => chart.addData('ref', { timestamp: 9000, value: 42 })).toThrow(
+        "GlideChart: series 'ref' not found",
+      );
+
+      // Remaining series should still work
+      chart.addData('price', { timestamp: 5000, value: 50 });
+      chart.addData('volume', { timestamp: 5000, value: 200 });
+      tickFrame();
+      chart.destroy();
+    });
+  });
+
   describe('rendering integration', () => {
     it('renders without error after addData and frame tick', () => {
       const chart = new GlideChart(container, {

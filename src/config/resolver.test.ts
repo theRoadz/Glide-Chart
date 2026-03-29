@@ -170,6 +170,37 @@ describe('resolveConfig', () => {
     expect(s2.line.width).toBe(3);
   });
 
+  it('all resolved series configs are deeply frozen (immutable)', () => {
+    const config = resolveConfig({
+      series: [
+        { id: 'price', line: { color: '#ff0000' } },
+        { id: 'ref' },
+      ],
+    });
+    for (const series of config.series) {
+      expect(Object.isFrozen(series)).toBe(true);
+      expect(Object.isFrozen(series.line)).toBe(true);
+      expect(Object.isFrozen(series.gradient)).toBe(true);
+    }
+  });
+
+  it('series with no overrides inherits global line AND gradient defaults correctly', () => {
+    const config = resolveConfig({
+      line: { color: '#ff0000', width: 3, opacity: 0.8 },
+      gradient: { enabled: false, topColor: '#aabbcc', topOpacity: 0.5, bottomColor: '#112233', bottomOpacity: 0.1 },
+      series: [{ id: 'test' }],
+    });
+    const series0 = config.series[0]!;
+    expect(series0.line.color).toBe('#ff0000');
+    expect(series0.line.width).toBe(3);
+    expect(series0.line.opacity).toBe(0.8);
+    expect(series0.gradient.enabled).toBe(false);
+    expect(series0.gradient.topColor).toBe('#aabbcc');
+    expect(series0.gradient.topOpacity).toBe(0.5);
+    expect(series0.gradient.bottomColor).toBe('#112233');
+    expect(series0.gradient.bottomOpacity).toBe(0.1);
+  });
+
   it('returns a frozen top-level config object', () => {
     const config = resolveConfig();
     expect(Object.isFrozen(config)).toBe(true);

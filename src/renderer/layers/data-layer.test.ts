@@ -262,6 +262,115 @@ describe('DataLayerRenderer', () => {
     });
   });
 
+  describe('draw() — multi-series edge cases', () => {
+    it('3 series render 3 separate curves (3 stroke calls)', () => {
+      const { canvas, ctx } = createCanvas();
+      const scale = makeScale();
+      scale.setDomainX(0, 10);
+      scale.setDomainY(0, 100);
+
+      const series1 = makeSeries([[0, 10], [10, 90]], makeSeriesConfig({ lineColor: '#ff0000', gradientEnabled: false }));
+      const series2 = makeSeries([[0, 50], [10, 20]], makeSeriesConfig({ lineColor: '#00ff00', gradientEnabled: false }));
+      const series3 = makeSeries([[0, 30], [10, 70]], makeSeriesConfig({ lineColor: '#0000ff', gradientEnabled: false }));
+
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series1, series2, series3]);
+      renderer.draw();
+
+      expect((ctx.stroke as ReturnType<typeof vi.fn>).mock.calls.length).toBe(3);
+    });
+
+    it('mixed gradient states — series A gradient enabled, series B disabled', () => {
+      const { canvas, ctx } = createCanvas();
+      const scale = makeScale();
+      scale.setDomainX(0, 10);
+      scale.setDomainY(0, 100);
+
+      const seriesA = makeSeries([[0, 10], [10, 90]], makeSeriesConfig({ gradientEnabled: true }));
+      const seriesB = makeSeries([[0, 50], [10, 20]], makeSeriesConfig({ gradientEnabled: false }));
+
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [seriesA, seriesB]);
+      renderer.draw();
+
+      // createLinearGradient called once (only for series A)
+      expect((ctx.createLinearGradient as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1);
+      // Both series still render curves (2 stroke calls)
+      expect((ctx.stroke as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2);
+    });
+
+    it('series with different data lengths both render', () => {
+      const { canvas, ctx } = createCanvas();
+      const scale = makeScale();
+      scale.setDomainX(0, 200);
+      scale.setDomainY(0, 100);
+
+      // Series A: 5 points
+      const seriesA = makeSeries(
+        [[0, 10], [50, 30], [100, 50], [150, 70], [200, 90]],
+        makeSeriesConfig({ lineColor: '#ff0000', gradientEnabled: false }),
+      );
+
+      // Series B: 100 points
+      const pointsB: [number, number][] = [];
+      for (let i = 0; i < 100; i++) {
+        pointsB.push([i * 2, Math.sin(i * 0.1) * 50 + 50]);
+      }
+      const seriesB = makeSeries(pointsB, makeSeriesConfig({ lineColor: '#00ff00', gradientEnabled: false }));
+
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [seriesA, seriesB]);
+      renderer.draw();
+
+      // Both series rendered (2 stroke calls)
+      expect((ctx.stroke as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2);
+    });
+
+    it('one empty series + one populated series — empty is skipped, populated renders', () => {
+      const { canvas, ctx } = createCanvas();
+      const scale = makeScale();
+      scale.setDomainX(0, 10);
+      scale.setDomainY(0, 100);
+
+      const emptySeries = makeSeries([], makeSeriesConfig({ lineColor: '#ff0000', gradientEnabled: false }));
+      const populatedSeries = makeSeries([[0, 10], [10, 90]], makeSeriesConfig({ lineColor: '#00ff00', gradientEnabled: false }));
+
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [emptySeries, populatedSeries]);
+      renderer.draw();
+
+      // Only 1 stroke call — empty series skipped
+      expect((ctx.stroke as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1);
+    });
+
+    it('multi-series performance — 3 series x 5K points completes within 1500ms', () => {
+      const { canvas, ctx } = createCanvas();
+      const scale = makeScale();
+
+      const seriesArr: SeriesRenderData[] = [];
+      for (let s = 0; s < 3; s++) {
+        const buffer = new RingBuffer<DataPoint>(10000);
+        for (let i = 0; i < 5000; i++) {
+          buffer.push({ timestamp: i, value: Math.sin(i * 0.01 + s) * 50 + 50 });
+        }
+        const splineCache = new SplineCache(buffer);
+        splineCache.computeFull();
+        seriesArr.push({
+          buffer,
+          splineCache,
+          config: makeSeriesConfig({ gradientEnabled: false }),
+        });
+      }
+
+      scale.setDomainX(0, 4999);
+      scale.setDomainY(0, 100);
+
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, seriesArr);
+
+      const start = performance.now();
+      renderer.draw();
+      const elapsed = performance.now() - start;
+
+      expect(elapsed).toBeLessThan(1500);
+    });
+  });
+
   describe('hexToRgba', () => {
     it('correctly converts #RRGGBB to rgba(r, g, b, a)', () => {
       expect(hexToRgba('#00d4aa', 0.3)).toBe('rgba(0, 212, 170, 0.3)');

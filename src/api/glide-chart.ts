@@ -257,6 +257,15 @@ export class GlideChart {
         // New series — create buffer and spline cache
         const buffer = new RingBuffer<DataPoint>(this.resolvedConfig.maxDataPoints);
         const splineCache = new SplineCache(buffer);
+        // Populate initial data if provided in the merged user config
+        const userSeries = this.userConfig.series?.find((s) => s.id === seriesConfig.id);
+        if (userSeries?.data && userSeries.data.length > 0) {
+          for (const point of userSeries.data) {
+            validateDataPoint(point);
+            buffer.push(point);
+          }
+          splineCache.computeFull();
+        }
         this.seriesMap.set(seriesConfig.id, { buffer, splineCache, config: seriesConfig });
       }
     }
