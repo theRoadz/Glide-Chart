@@ -24,16 +24,24 @@ export class XAxisRenderer {
     const tz = config.xAxis.timezone;
     const baseOpts: Intl.DateTimeFormatOptions | undefined = tz ? { timeZone: tz } : undefined;
 
+    let locale: string | undefined;
     try {
-      this.fmtSeconds = new Intl.DateTimeFormat(undefined, {
+      new Intl.DateTimeFormat(config.xAxis.locale);
+      locale = config.xAxis.locale;
+    } catch {
+      locale = undefined;
+    }
+
+    try {
+      this.fmtSeconds = new Intl.DateTimeFormat(locale, {
         hour: '2-digit', minute: '2-digit', second: '2-digit',
         hourCycle: 'h23', ...baseOpts,
       });
-      this.fmtMinutes = new Intl.DateTimeFormat(undefined, {
+      this.fmtMinutes = new Intl.DateTimeFormat(locale, {
         hour: '2-digit', minute: '2-digit',
         hourCycle: 'h23', ...baseOpts,
       });
-      this.fmtDays = new Intl.DateTimeFormat(undefined, {
+      this.fmtDays = new Intl.DateTimeFormat(locale, {
         month: 'short', day: 'numeric',
         ...baseOpts,
       });

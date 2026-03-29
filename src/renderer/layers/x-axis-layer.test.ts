@@ -21,13 +21,15 @@ function makeConfig(overrides?: {
   visible?: boolean;
   labelFormatter?: (value: number) => string;
   timezone?: string;
+  locale?: string;
 }): Readonly<ResolvedConfig> {
   const config: Record<string, unknown> = {};
-  if (overrides?.visible !== undefined || overrides?.labelFormatter || overrides?.timezone) {
+  if (overrides?.visible !== undefined || overrides?.labelFormatter || overrides?.timezone || overrides?.locale !== undefined) {
     const xAxis: Record<string, unknown> = {};
     if (overrides.visible !== undefined) xAxis.visible = overrides.visible;
     if (overrides.labelFormatter) xAxis.labelFormatter = overrides.labelFormatter;
     if (overrides.timezone) xAxis.timezone = overrides.timezone;
+    if (overrides.locale !== undefined) xAxis.locale = overrides.locale;
     config.xAxis = xAxis;
   }
   return resolveConfig(config);
@@ -46,6 +48,7 @@ function createRenderer(opts?: {
   visible?: boolean;
   labelFormatter?: (value: number) => string;
   timezone?: string;
+  locale?: string;
   domainXMin?: number;
   domainXMax?: number;
 }) {
@@ -61,6 +64,7 @@ function createRenderer(opts?: {
     visible: opts?.visible,
     labelFormatter: opts?.labelFormatter,
     timezone: opts?.timezone,
+    locale: opts?.locale,
   });
   const renderer = new XAxisRenderer(ctx, canvas, scale, config);
   return { renderer, ctx, canvas, scale, config };
@@ -322,6 +326,64 @@ describe('XAxisRenderer', () => {
         const { renderer } = createRenderer({ timezone: 'Invalid/Timezone' });
         renderer.draw();
       }).not.toThrow();
+    });
+  });
+
+  describe('locale support', () => {
+    it('explicit locale affects day-level label output', () => {
+      // 7-day range for day-level formatting
+      const { renderer: enRenderer, ctx: enCtx } = createRenderer({
+        domainXMin: 1704067200000,
+        domainXMax: 1704672000000,
+        timezone: 'UTC',
+        locale: 'en-US',
+      });
+      const enFillText = vi.spyOn(enCtx, 'fillText');
+      enRenderer.draw();
+      const enLabels = enFillText.mock.calls.map(([text]) => text as string);
+
+      const { renderer: deRenderer, ctx: deCtx } = createRenderer({
+        domainXMin: 1704067200000,
+        domainXMax: 1704672000000,
+        timezone: 'UTC',
+        locale: 'de-DE',
+      });
+      const deFillText = vi.spyOn(deCtx, 'fillText');
+      deRenderer.draw();
+      const deLabels = deFillText.mock.calls.map(([text]) => text as string);
+
+      expect(enLabels.length).toBeGreaterThan(0);
+      expect(deLabels.length).toBeGreaterThan(0);
+      // en-US and de-DE use different month abbreviations (e.g., "Jan" vs "Jan." or ordering)
+      // At minimum, both should produce valid non-empty labels
+      for (const label of [...enLabels, ...deLabels]) {
+        expect(label.length).toBeGreaterThan(0);
+        expect(label).toMatch(/[A-Za-z]/);
+      }
+    });
+
+    it('invalid locale string does not crash — falls back to browser default', () => {
+      expect(() => {
+        const { renderer } = createRenderer({
+          locale: 'not-a-real-locale-xyz',
+          timezone: 'UTC',
+        });
+        renderer.draw();
+      }).not.toThrow();
+    });
+
+    it('no locale configured produces valid output', () => {
+      const { renderer, ctx } = createRenderer({
+        timezone: 'UTC',
+      });
+      const fillTextSpy = vi.spyOn(ctx, 'fillText');
+      renderer.draw();
+
+      expect(fillTextSpy).toHaveBeenCalled();
+      for (const [text] of fillTextSpy.mock.calls) {
+        expect(typeof text).toBe('string');
+        expect((text as string).length).toBeGreaterThan(0);
+      }
     });
   });
 

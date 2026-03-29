@@ -9,6 +9,7 @@ const MAX_DECIMALS = 10;
 
 export class YAxisRenderer {
   private readonly fontString: string;
+  private readonly locale: string | undefined;
 
   constructor(
     private readonly ctx: CanvasRenderingContext2D,
@@ -17,6 +18,14 @@ export class YAxisRenderer {
     private readonly config: Readonly<ResolvedConfig>,
   ) {
     this.fontString = `${config.yAxis.labelFontSize}px ${config.yAxis.labelFontFamily}`;
+
+    const locale = config.yAxis.locale;
+    try {
+      new Intl.NumberFormat(locale);
+      this.locale = locale;
+    } catch {
+      this.locale = undefined;
+    }
   }
 
   draw(): void {
@@ -75,13 +84,24 @@ export class YAxisRenderer {
     }
 
     if (tickSpacing === 0) {
-      return String(value);
+      try {
+        return new Intl.NumberFormat(this.locale).format(value);
+      } catch {
+        return String(value);
+      }
     }
 
     const decimals = Math.min(
       MAX_DECIMALS,
       Math.max(0, Math.round(-Math.log10(tickSpacing))),
     );
-    return value.toFixed(decimals);
+    try {
+      return new Intl.NumberFormat(this.locale, {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      }).format(value);
+    } catch {
+      return value.toFixed(decimals);
+    }
   }
 }

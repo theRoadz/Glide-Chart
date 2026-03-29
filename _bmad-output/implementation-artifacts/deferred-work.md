@@ -43,3 +43,7 @@
 
 - ~~**Minimum container size increased by padding change**~~ — Fixed: GlideChart constructor and handleResize now clamp dimensions to minimum required by padding, preventing Scale.validateDimensions from throwing on tiny containers.
 - ~~**Cannot unset timezone via setConfig(null)**~~ — Fixed: deepMerge now treats `null` as a reset signal (deletes the key) instead of skipping it. Allows `setConfig({ xAxis: { timezone: null } })` to clear timezone.
+
+## ~~Deferred from: code review of 2-4-locale-aware-number-formatting (2026-03-29)~~
+
+- ~~**x-axis `DateTimeFormat` ignores `config.xAxis.locale`**~~ — Fixed: wired `config.xAxis.locale` into all three `DateTimeFormat` constructors with locale validation.
