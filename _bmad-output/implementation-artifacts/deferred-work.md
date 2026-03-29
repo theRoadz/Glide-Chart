@@ -60,3 +60,7 @@
 ## ~~Deferred from: code review of story-3.2 (2026-03-29)~~
 
 - ~~**Spline computation covers full buffer, not just visible window**~~ — Fixed: `computeCurvePoints` now skips coefficient segments outside the visible X domain.
+
+## ~~Deferred from: code review of story-3.3 (2026-03-29)~~
+
+- ~~**Unbounded `batchBuffer` growth under extreme throughput**~~ — Fixed: added `maxBatchBufferSize` config option (default 10000) with early flush when cap is reached.

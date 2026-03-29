@@ -22,6 +22,8 @@ export type {
 
 export { ThemeMode } from '../config/types';
 
+export type { DataSourceState, WebSocketDataSourceConfig } from '../streaming/types';
+
 import type { ChartConfig, SeriesConfig } from '../config/types';
 import type { DataPoint } from '../core/types';
 

@@ -21,3 +21,6 @@ export type {
 } from './api/types';
 
 export { ThemeMode } from './api/types';
+
+export { WebSocketDataSource } from './streaming';
+export type { DataSourceState, WebSocketDataSourceConfig } from './streaming';
