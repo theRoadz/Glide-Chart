@@ -62,6 +62,7 @@ export const DARK_THEME: Partial<ChartConfig> = {
   zoom: true,
   maxDataPoints: 10000,
   staleThreshold: 5000,
+  timeWindow: 0,
 };
 
 export const LIGHT_THEME: Partial<ChartConfig> = {
@@ -122,6 +123,7 @@ export const LIGHT_THEME: Partial<ChartConfig> = {
   zoom: true,
   maxDataPoints: 10000,
   staleThreshold: 5000,
+  timeWindow: 0,
 };
 
 export function getThemePreset(mode: ThemeMode): Partial<ChartConfig> {

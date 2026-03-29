@@ -25,5 +25,6 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
   series: [],
   maxDataPoints: DARK_THEME.maxDataPoints as number,
   staleThreshold: DARK_THEME.staleThreshold as number,
+  timeWindow: DARK_THEME.timeWindow as number,
   zoom: DARK_THEME.zoom as boolean,
 };

@@ -56,3 +56,7 @@
 ## ~~Deferred from: code review of 3-1-incremental-data-push-and-animation (2026-03-29)~~
 
 - ~~**Constructor allocates animation buffers even when `animation.enabled = false`**~~ — Fixed: skip `interpBuf`/`prevPathBufs` allocation when animation is disabled or duration <= 0.
+
+## ~~Deferred from: code review of story-3.2 (2026-03-29)~~
+
+- ~~**Spline computation covers full buffer, not just visible window**~~ — Fixed: `computeCurvePoints` now skips coefficient segments outside the visible X domain.

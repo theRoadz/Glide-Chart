@@ -206,6 +206,15 @@
         </select>
       </label>
       <div class="divider"></div>
+      <label style="color: var(--text-muted); font-size: 13px;">Time Window:
+        <select id="stream-time-window" style="padding: 6px 8px; border: 1px solid var(--btn-border); border-radius: 6px; background: var(--btn-bg); color: var(--btn-text); font-size: 13px;">
+          <option value="0">Off</option>
+          <option value="30">30s</option>
+          <option value="60" selected>60s</option>
+          <option value="300">5min</option>
+        </select>
+      </label>
+      <div class="divider"></div>
       <span style="font-size: 12px; color: var(--text-muted);">Points: <strong id="stream-point-count">50</strong></span>
       <span style="font-size: 12px; color: var(--text-muted);">FPS: <strong id="stream-fps">0</strong></span>
     </div>
@@ -504,6 +513,7 @@
     const streamSpeedSelect = document.getElementById('stream-speed');
     const streamPointCount = document.getElementById('stream-point-count');
     const streamFps = document.getElementById('stream-fps');
+    const streamTimeWindowSelect = document.getElementById('stream-time-window');
 
     let streamChart = null;
     let streamInterval = null;
@@ -540,9 +550,11 @@
       streamLastPrice = price;
       streamPoints = 50;
 
+      const initialTimeWindow = parseInt(streamTimeWindowSelect.value, 10);
       streamChart = new GlideChart(streamContainer, {
         theme: currentTheme,
         animation: { enabled: true, duration: 300 },
+        timeWindow: initialTimeWindow,
         series: [
           {
             id: 'live',
@@ -635,6 +647,13 @@
         createStreamChart();
         btnStreamStart.disabled = false;
         btnStreamStop.disabled = true;
+      }
+    });
+
+    streamTimeWindowSelect.addEventListener('change', () => {
+      if (streamChart) {
+        const value = parseInt(streamTimeWindowSelect.value, 10);
+        streamChart.setConfig({ timeWindow: value });
       }
     });
 

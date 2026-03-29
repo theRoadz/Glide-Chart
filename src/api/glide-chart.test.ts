@@ -704,6 +704,355 @@ describe('GlideChart', () => {
     });
   });
 
+  describe('timeWindow', () => {
+    it('timeWindow: 300 with 10 minutes of data — domainX covers only last 5 minutes', () => {
+      const now = Date.now();
+      // 10 minutes of data at 1-second intervals = 600 points
+      const points: DataPoint[] = [];
+      for (let i = 0; i < 600; i++) {
+        points.push({ timestamp: now - (600 - i) * 1000, value: 50 + Math.sin(i * 0.1) * 10 });
+      }
+
+      const chart = new GlideChart(container, {
+        timeWindow: 300,
+        series: [{ id: 'price', data: points }],
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scale = (chart as any).scale as { domainX: { min: number; max: number } };
+      const latestTs = points[points.length - 1].timestamp;
+      const expectedStart = latestTs - 300 * 1000;
+
+      expect(scale.domainX.max).toBe(latestTs);
+      expect(scale.domainX.min).toBe(expectedStart);
+      chart.destroy();
+    });
+
+    it('timeWindow: 60 — viewport covers last 60 seconds', () => {
+      const now = Date.now();
+      const points: DataPoint[] = [];
+      for (let i = 0; i < 120; i++) {
+        points.push({ timestamp: now - (120 - i) * 1000, value: 50 + i });
+      }
+
+      const chart = new GlideChart(container, {
+        timeWindow: 60,
+        series: [{ id: 'price', data: points }],
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scale = (chart as any).scale as { domainX: { min: number; max: number } };
+      const latestTs = points[points.length - 1].timestamp;
+      expect(scale.domainX.max).toBe(latestTs);
+      expect(scale.domainX.min).toBe(latestTs - 60000);
+      chart.destroy();
+    });
+
+    it('timeWindow: 3600 — viewport covers last hour', () => {
+      const now = Date.now();
+      const points: DataPoint[] = [];
+      for (let i = 0; i < 100; i++) {
+        points.push({ timestamp: now - (7200 - i * 72) * 1000, value: 50 });
+      }
+
+      const chart = new GlideChart(container, {
+        timeWindow: 3600,
+        series: [{ id: 'price', data: points }],
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scale = (chart as any).scale as { domainX: { min: number; max: number } };
+      const latestTs = points[points.length - 1].timestamp;
+      expect(scale.domainX.max).toBe(latestTs);
+      expect(scale.domainX.min).toBe(latestTs - 3600000);
+      chart.destroy();
+    });
+
+    it('addData with timeWindow — domain X shifts right (auto-scroll), y-axis fits to visible range only', () => {
+      const now = Date.now();
+      const points: DataPoint[] = [];
+      // First 50 points: values 0-10 (old data, outside window later)
+      for (let i = 0; i < 50; i++) {
+        points.push({ timestamp: now - (100 - i) * 1000, value: 5 });
+      }
+      // Next 50 points: values 90-100 (recent data, inside window)
+      for (let i = 50; i < 100; i++) {
+        points.push({ timestamp: now - (100 - i) * 1000, value: 95 });
+      }
+
+      const chart = new GlideChart(container, {
+        timeWindow: 30,
+        animation: { enabled: false },
+        series: [{ id: 'price', data: points }],
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scale = (chart as any).scale as { domainX: { min: number; max: number }; domainY: { min: number; max: number } };
+
+      const latestTs = points[points.length - 1].timestamp;
+      expect(scale.domainX.max).toBe(latestTs);
+
+      // Add a new point — domain should shift
+      const newTs = latestTs + 1000;
+      chart.addData('price', { timestamp: newTs, value: 95 });
+
+      expect(scale.domainX.max).toBe(newTs);
+      expect(scale.domainX.min).toBe(newTs - 30000);
+
+      chart.destroy();
+    });
+
+    it('setData with timeWindow — domain applies to new dataset', () => {
+      const now = Date.now();
+      const initialPoints: DataPoint[] = [];
+      for (let i = 0; i < 50; i++) {
+        initialPoints.push({ timestamp: now - (50 - i) * 1000, value: 50 });
+      }
+
+      const chart = new GlideChart(container, {
+        timeWindow: 60,
+        series: [{ id: 'price', data: initialPoints }],
+      });
+
+      // Replace with new data
+      const newPoints: DataPoint[] = [];
+      const newNow = now + 60000;
+      for (let i = 0; i < 100; i++) {
+        newPoints.push({ timestamp: newNow - (100 - i) * 1000, value: 75 });
+      }
+      chart.setData('price', newPoints);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scale = (chart as any).scale as { domainX: { min: number; max: number } };
+      const latestTs = newPoints[newPoints.length - 1].timestamp;
+      expect(scale.domainX.max).toBe(latestTs);
+      expect(scale.domainX.min).toBe(latestTs - 60000);
+      chart.destroy();
+    });
+
+    it('setConfig({ timeWindow: 120 }) on running chart — viewport adjusts immediately', () => {
+      const now = Date.now();
+      const points: DataPoint[] = [];
+      for (let i = 0; i < 300; i++) {
+        points.push({ timestamp: now - (300 - i) * 1000, value: 50 });
+      }
+
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price', data: points }],
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scale = (chart as any).scale as { domainX: { min: number; max: number } };
+
+      // Initially no time window — full range
+      const latestTs = points[points.length - 1].timestamp;
+      const oldestTs = points[0].timestamp;
+      expect(scale.domainX.min).toBe(oldestTs);
+      expect(scale.domainX.max).toBe(latestTs);
+
+      // Now set timeWindow
+      chart.setConfig({ timeWindow: 120 });
+
+      expect(scale.domainX.max).toBe(latestTs);
+      expect(scale.domainX.min).toBe(latestTs - 120000);
+      chart.destroy();
+    });
+
+    it('timeWindow: 0 (default) — full data range (backward-compatible behavior)', () => {
+      const now = Date.now();
+      const points: DataPoint[] = [];
+      for (let i = 0; i < 100; i++) {
+        points.push({ timestamp: now - (100 - i) * 1000, value: 50 + i });
+      }
+
+      const chart = new GlideChart(container, {
+        timeWindow: 0,
+        series: [{ id: 'price', data: points }],
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scale = (chart as any).scale as { domainX: { min: number; max: number } };
+      expect(scale.domainX.min).toBe(points[0].timestamp);
+      expect(scale.domainX.max).toBe(points[points.length - 1].timestamp);
+      chart.destroy();
+    });
+
+    it('data span shorter than timeWindow — all data visible, left edge is latest - window*1000', () => {
+      const now = Date.now();
+      const points: DataPoint[] = [];
+      // Only 30 seconds of data
+      for (let i = 0; i < 30; i++) {
+        points.push({ timestamp: now - (30 - i) * 1000, value: 50 });
+      }
+
+      const chart = new GlideChart(container, {
+        timeWindow: 300, // 5 min window, but only 30s of data
+        series: [{ id: 'price', data: points }],
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scale = (chart as any).scale as { domainX: { min: number; max: number } };
+      const latestTs = points[points.length - 1].timestamp;
+      expect(scale.domainX.max).toBe(latestTs);
+      expect(scale.domainX.min).toBe(latestTs - 300000);
+      chart.destroy();
+    });
+
+    it('y-axis auto-scales to visible window only — data outside window with extreme values does NOT affect y range', () => {
+      const now = Date.now();
+      const points: DataPoint[] = [];
+
+      // Old data with extreme values (outside window)
+      for (let i = 0; i < 50; i++) {
+        points.push({ timestamp: now - (100 - i) * 1000, value: 1000 }); // extreme high
+      }
+      // Recent data with moderate values (inside 30s window)
+      for (let i = 50; i < 100; i++) {
+        points.push({ timestamp: now - (100 - i) * 1000, value: 50 });
+      }
+
+      const chart = new GlideChart(container, {
+        timeWindow: 30,
+        series: [{ id: 'price', data: points }],
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scale = (chart as any).scale as { domainY: { min: number; max: number } };
+
+      // Y domain should be centered around 50, NOT expanded to 1000
+      // With 10% padding: 50 ± ~0 (all values are 50, so domainY = 49..51)
+      expect(scale.domainY.max).toBeLessThan(100);
+      expect(scale.domainY.min).toBeGreaterThan(0);
+      chart.destroy();
+    });
+
+    it('empty dataset with timeWindow configured — no crash', () => {
+      const chart = new GlideChart(container, {
+        timeWindow: 300,
+        series: [{ id: 'price' }],
+      });
+      tickFrame();
+      chart.destroy();
+    });
+
+    it('all data in one series older than time window (multi-series) — y-axis ignores old series data', () => {
+      const now = Date.now();
+      // Series A: recent data (within 30s window), moderate values
+      const recentPoints: DataPoint[] = [];
+      for (let i = 0; i < 10; i++) {
+        recentPoints.push({ timestamp: now - (10 - i) * 1000, value: 50 });
+      }
+      // Series B: old data (10 min ago), extreme values
+      const oldPoints: DataPoint[] = [];
+      for (let i = 0; i < 10; i++) {
+        oldPoints.push({ timestamp: now - 600000 + i * 1000, value: 5000 });
+      }
+
+      const chart = new GlideChart(container, {
+        timeWindow: 30,
+        series: [
+          { id: 'recent', data: recentPoints },
+          { id: 'old', data: oldPoints },
+        ],
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scale = (chart as any).scale as { domainX: { min: number; max: number }; domainY: { min: number; max: number } };
+
+      // Window is based on latest timestamp across ALL series (from 'recent')
+      const latestTs = recentPoints[recentPoints.length - 1].timestamp;
+      expect(scale.domainX.max).toBe(latestTs);
+      expect(scale.domainX.min).toBe(latestTs - 30000);
+
+      // Y domain should NOT include 5000 from old series — only ~50 from recent
+      expect(scale.domainY.max).toBeLessThan(100);
+
+      tickFrame();
+      chart.destroy();
+    });
+  });
+
+  describe('timeWindow streaming integration', () => {
+    it('stream 100 points over simulated 10-minute span with timeWindow: 300 — domain tracks correctly', () => {
+      const startTs = Date.now() - 600000; // 10 min ago
+      const chart = new GlideChart(container, {
+        timeWindow: 300,
+        animation: { enabled: false },
+        series: [{ id: 'live' }],
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scale = (chart as any).scale as { domainX: { min: number; max: number } };
+
+      // Stream 100 points, 6s apart = 10 min
+      let latestTs = startTs;
+      for (let i = 0; i < 100; i++) {
+        latestTs = startTs + i * 6000;
+        chart.addData('live', { timestamp: latestTs, value: 50 + Math.sin(i * 0.1) * 10 });
+      }
+
+      expect(scale.domainX.max).toBe(latestTs);
+      expect(scale.domainX.min).toBe(latestTs - 300000);
+      chart.destroy();
+    });
+
+    it('auto-scroll marks axis and background dirty on every addData (since domainX shifts each time)', () => {
+      const now = Date.now();
+      const points: DataPoint[] = [];
+      for (let i = 0; i < 20; i++) {
+        points.push({ timestamp: now - (20 - i) * 1000, value: 50 });
+      }
+
+      const chart = new GlideChart(container, {
+        timeWindow: 30,
+        animation: { enabled: false },
+        series: [{ id: 'live', data: points }],
+      });
+      tickFrame();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scheduler = (chart as any).frameScheduler;
+      const markDirtySpy = vi.spyOn(scheduler, 'markDirty');
+
+      // Add a new point — domain shifts, so axis + background should be dirty
+      chart.addData('live', { timestamp: now + 1000, value: 55 });
+
+      const dirtyTypes = markDirtySpy.mock.calls.map((c) => c[0]);
+      expect(dirtyTypes).toContain(LayerType.Data);
+      expect(dirtyTypes).toContain(LayerType.Axis);
+      expect(dirtyTypes).toContain(LayerType.Background);
+
+      markDirtySpy.mockRestore();
+      chart.destroy();
+    });
+
+    it('animation still works with time window (snapshot + interpolation unaffected by windowed domain)', () => {
+      const now = Date.now();
+      const points: DataPoint[] = [];
+      for (let i = 0; i < 20; i++) {
+        points.push({ timestamp: now - (20 - i) * 1000, value: 50 });
+      }
+
+      const chart = new GlideChart(container, {
+        timeWindow: 30,
+        animation: { enabled: true, duration: 300 },
+        series: [{ id: 'live', data: points }],
+      });
+      tickFrame();
+
+      // Add a point — should trigger animation
+      chart.addData('live', { timestamp: now + 1000, value: 60 });
+
+      // Animation should be pumping
+      tickFrame();
+      expect(rafCallback).not.toBeNull();
+      tickFrame();
+      expect(rafCallback).not.toBeNull();
+
+      chart.destroy();
+    });
+  });
+
   describe('performance benchmarks', () => {
     it('10,000 points + 100 sequential addData calls completes under 500ms', () => {
       const chart = new GlideChart(container, {

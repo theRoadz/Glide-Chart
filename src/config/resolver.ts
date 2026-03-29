@@ -147,9 +147,16 @@ export function resolveConfig(userConfig?: ChartConfig): ResolvedConfig {
     }
   }
 
+  // Clamp timeWindow: negative, non-finite, or sub-second values default to 0 (show all data)
+  const clampedTimeWindow =
+    Number.isFinite(merged.timeWindow) && merged.timeWindow >= 1
+      ? merged.timeWindow
+      : 0;
+
   const result: ResolvedConfig = {
     ...merged,
     series: resolvedSeries,
+    timeWindow: clampedTimeWindow,
   };
 
   // Validate final merged result

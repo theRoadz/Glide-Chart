@@ -331,4 +331,46 @@ describe('resolveConfig', () => {
       'ConfigResolver: maxDataPoints must be a positive integer'
     );
   });
+
+  describe('timeWindow resolution', () => {
+    it('defaults to 0 when no user config', () => {
+      const config = resolveConfig();
+      expect(config.timeWindow).toBe(0);
+    });
+
+    it('preserves user override', () => {
+      const config = resolveConfig({ timeWindow: 300 });
+      expect(config.timeWindow).toBe(300);
+    });
+
+    it('clamps negative value to 0', () => {
+      const config = resolveConfig({ timeWindow: -10 });
+      expect(config.timeWindow).toBe(0);
+    });
+
+    it('clamps NaN to 0', () => {
+      const config = resolveConfig({ timeWindow: NaN });
+      expect(config.timeWindow).toBe(0);
+    });
+
+    it('clamps Infinity to 0', () => {
+      const config = resolveConfig({ timeWindow: Infinity });
+      expect(config.timeWindow).toBe(0);
+    });
+
+    it('clamps -Infinity to 0', () => {
+      const config = resolveConfig({ timeWindow: -Infinity });
+      expect(config.timeWindow).toBe(0);
+    });
+
+    it('clamps sub-second value to 0', () => {
+      const config = resolveConfig({ timeWindow: 0.5 });
+      expect(config.timeWindow).toBe(0);
+    });
+
+    it('merges correctly with theme preset (theme has 0, user overrides)', () => {
+      const config = resolveConfig({ theme: ThemeMode.Light, timeWindow: 60 });
+      expect(config.timeWindow).toBe(60);
+    });
+  });
 });

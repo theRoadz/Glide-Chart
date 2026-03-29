@@ -1,5 +1,5 @@
 import type { DataPoint } from '../core/types';
-import { RingBuffer } from '../core/ring-buffer';
+import { RingBuffer, getVisibleWindow } from '../core/ring-buffer';
 import { SplineCache } from '../core/spline-cache';
 import { Scale } from '../core/scale';
 import type { ChartConfig, ResolvedConfig, ResolvedSeriesConfig } from '../config/types';
@@ -347,6 +347,7 @@ export class GlideChart {
       };
     }
 
+    this.autoFitScale();
     this.frameScheduler.markAllDirty();
   }
 
@@ -421,6 +422,13 @@ export class GlideChart {
   }
 
   private autoFitScale(): boolean {
+    const timeWindow = this.resolvedConfig.timeWindow;
+
+    if (timeWindow > 0) {
+      return this.autoFitScaleWindowed(timeWindow);
+    }
+
+    // Default behavior: auto-fit to full data range
     const allTimestamps: number[] = [];
     const allValues: number[] = [];
 
@@ -440,6 +448,58 @@ export class GlideChart {
 
     this.scale.autoFitX(allTimestamps);
     this.scale.autoFitY(allValues);
+
+    const newDomainX = this.scale.domainX;
+    const newDomainY = this.scale.domainY;
+
+    return (
+      oldDomainX.min !== newDomainX.min ||
+      oldDomainX.max !== newDomainX.max ||
+      oldDomainY.min !== newDomainY.min ||
+      oldDomainY.max !== newDomainY.max
+    );
+  }
+
+  private autoFitScaleWindowed(timeWindowSeconds: number): boolean {
+    // Find latest timestamp across all series using peek() — O(1) per series
+    let latestTimestamp = -Infinity;
+    for (const state of this.seriesMap.values()) {
+      const newest = state.buffer.peek() as DataPoint | undefined;
+      if (newest && newest.timestamp > latestTimestamp) {
+        latestTimestamp = newest.timestamp;
+      }
+    }
+
+    if (!Number.isFinite(latestTimestamp)) {
+      return false;
+    }
+
+    let windowStart = latestTimestamp - timeWindowSeconds * 1000;
+    if (!Number.isFinite(windowStart)) {
+      windowStart = latestTimestamp;
+    }
+
+    const oldDomainX = this.scale.domainX;
+    const oldDomainY = this.scale.domainY;
+
+    // Set X domain to the time window
+    this.scale.setDomainX(windowStart, latestTimestamp);
+
+    // Auto-fit Y to only visible data within the window
+    const visibleValues: number[] = [];
+    for (const state of this.seriesMap.values()) {
+      const visiblePoints = getVisibleWindow(state.buffer, {
+        start: windowStart,
+        end: latestTimestamp,
+      });
+      for (const point of visiblePoints) {
+        visibleValues.push(point.value);
+      }
+    }
+
+    if (visibleValues.length > 0) {
+      this.scale.autoFitY(visibleValues);
+    }
 
     const newDomainX = this.scale.domainX;
     const newDomainY = this.scale.domainY;

@@ -78,6 +78,8 @@ export interface ChartConfig {
   series?: SeriesConfig[];
   maxDataPoints?: number;
   staleThreshold?: number;
+  /** Visible time window in seconds. 0 or undefined = show all data. */
+  timeWindow?: number;
   zoom?: boolean;
 }
 
@@ -101,5 +103,6 @@ export interface ResolvedConfig {
   readonly series: readonly Readonly<ResolvedSeriesConfig>[];
   readonly maxDataPoints: number;
   readonly staleThreshold: number;
+  readonly timeWindow: number;
   readonly zoom: boolean;
 }

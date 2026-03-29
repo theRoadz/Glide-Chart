@@ -87,7 +87,11 @@ export function getVisibleWindow(
   buffer: RingBuffer<DataPoint>,
   range: TimeRange,
 ): DataPoint[] {
-  return buffer
-    .toArray()
-    .filter((p) => p.timestamp >= range.start && p.timestamp <= range.end);
+  const result: DataPoint[] = [];
+  for (const point of buffer) {
+    if (point.timestamp >= range.start && point.timestamp <= range.end) {
+      result.push(point);
+    }
+  }
+  return result;
 }

@@ -308,17 +308,20 @@ export class DataLayerRenderer {
     coefficients: ReadonlyArray<SplineCoefficients>,
   ): void {
     this.pathLen = 0;
+    const domainX = this.scale.domainX;
 
     for (let i = 0; i < coefficients.length; i++) {
       const coeff = coefficients[i]!;
+      // Skip segments entirely outside the visible X domain
+      if (coeff.x1 < domainX.min || coeff.x0 > domainX.max) continue;
       const px0 = this.scale.xToPixel(coeff.x0);
       const px1 = this.scale.xToPixel(coeff.x1);
       const pixelWidth = Math.abs(px1 - px0);
       const steps = Math.max(2, Math.ceil(pixelWidth / 2));
 
       for (let s = 0; s <= steps; s++) {
-        // Skip s=0 for segments after the first to avoid duplicate points
-        if (i > 0 && s === 0) continue;
+        // Skip s=0 for contiguous segments to avoid duplicate points
+        if (this.pathLen > 0 && s === 0) continue;
 
         const t = s / steps;
         const x = coeff.x0 + t * (coeff.x1 - coeff.x0);
