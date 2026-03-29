@@ -38,3 +38,8 @@
 - ~~**`labelFormatter` returning non-string has no runtime guard**~~ — Fixed: wrapped return in `String()` coercion
 - ~~**Long `labelFormatter` return value causes off-canvas label overflow**~~ — Fixed: added `maxWidth` parameter to `fillText`
 - **`setConfig()` layer `find` can silently fail leaving stale draw callback** — `this.layers.find(l => l.type === ...)` returns undefined silently if layer is missing. Pre-existing pattern across bg, axis, and data layers in `setConfig()`.
+
+## ~~Deferred from: code review of 2-3-x-axis-with-time-formatting-and-timezone-support (2026-03-29)~~
+
+- ~~**Minimum container size increased by padding change**~~ — Fixed: GlideChart constructor and handleResize now clamp dimensions to minimum required by padding, preventing Scale.validateDimensions from throwing on tiny containers.
+- ~~**Cannot unset timezone via setConfig(null)**~~ — Fixed: deepMerge now treats `null` as a reset signal (deletes the key) instead of skipping it. Allows `setConfig({ xAxis: { timezone: null } })` to clear timezone.

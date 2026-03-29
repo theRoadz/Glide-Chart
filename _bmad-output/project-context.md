@@ -96,6 +96,11 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - **NPM publish via `files` field** — only `dist/` is published; source, tests, and configs are excluded
 - **Widget bundle is self-contained** — UMD build includes everything; no external dependencies expected at runtime
 
+### Code Review Rules
+
+- **No deferred findings** — code review must fix all fixable findings before marking a story as done. If a finding is technically addressable (even if pre-existing), fix it in the current changeset rather than deferring it. Only defer findings that are truly out of scope (e.g., require a design decision from stakeholders, or affect an entirely different module with no relation to the current change).
+- **Fix pre-existing issues exposed by the change** — if the current change makes a latent bug more likely to trigger (e.g., raising minimum container size, exposing a missing API capability), fix that issue as part of the story.
+
 ### Critical Don't-Miss Rules
 
 #### Anti-Patterns to Avoid
@@ -144,4 +149,4 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Review quarterly for outdated rules
 - Remove rules that become obvious over time
 
-Last Updated: 2026-03-27
+Last Updated: 2026-03-29

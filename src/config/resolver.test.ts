@@ -42,13 +42,14 @@ describe('deepMerge', () => {
     expect(result.a).toBe(1);
   });
 
-  it('does not override target when source value is null', () => {
+  it('removes target key when source value is null', () => {
     const target = { a: 1, b: 2 };
     const result = deepMerge(
       target,
       { a: null } as unknown as Partial<typeof target>
     );
-    expect(result.a).toBe(1);
+    expect(result).not.toHaveProperty('a');
+    expect(result.b).toBe(2);
   });
 
   it('treats class instances as primitives (replaced, not recursed)', () => {

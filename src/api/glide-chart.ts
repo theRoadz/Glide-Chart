@@ -11,10 +11,11 @@ import { FrameScheduler } from '../renderer/frame-scheduler';
 import { DataLayerRenderer } from '../renderer/layers/data-layer';
 import { BackgroundLayerRenderer } from '../renderer/layers/background-layer';
 import { YAxisRenderer } from '../renderer/layers/y-axis-layer';
+import { XAxisRenderer } from '../renderer/layers/x-axis-layer';
 import type { SeriesRenderData } from '../renderer/layers/data-layer';
 import type { GlideChartConfig } from './types';
 
-const DEFAULT_PADDING = { top: 10, right: 10, bottom: 10, left: 10 };
+const DEFAULT_PADDING = { top: 10, right: 10, bottom: 30, left: 60 };
 
 interface SeriesState {
   buffer: RingBuffer<DataPoint>;
@@ -62,6 +63,7 @@ export class GlideChart {
   private dataLayerRenderer: DataLayerRenderer;
   private backgroundLayerRenderer: BackgroundLayerRenderer;
   private yAxisRenderer: YAxisRenderer;
+  private xAxisRenderer: XAxisRenderer;
   private layers: Layer[];
 
   constructor(container: HTMLElement, config?: GlideChartConfig) {
@@ -82,8 +84,10 @@ export class GlideChart {
     }
 
     // 3. Create Scale (before LayerManager which triggers onResize synchronously)
-    const containerWidth = container.clientWidth || 300;
-    const containerHeight = container.clientHeight || 150;
+    const minWidth = DEFAULT_PADDING.left + DEFAULT_PADDING.right + 1;
+    const minHeight = DEFAULT_PADDING.top + DEFAULT_PADDING.bottom + 1;
+    const containerWidth = Math.max(minWidth, container.clientWidth || 300);
+    const containerHeight = Math.max(minHeight, container.clientHeight || 150);
     const dpr = window.devicePixelRatio || 1;
     this.scale = new Scale({
       canvasWidth: containerWidth,
@@ -135,6 +139,7 @@ export class GlideChart {
     const axisCanvas = this.layerManager.getCanvas(LayerType.Axis);
     const axisCtx = this.layerManager.getContext(LayerType.Axis);
     this.yAxisRenderer = new YAxisRenderer(axisCtx, axisCanvas, this.scale, this.resolvedConfig);
+    this.xAxisRenderer = new XAxisRenderer(axisCtx, axisCanvas, this.scale, this.resolvedConfig);
 
     // 10. Create Layer adapters
     const interCanvas = this.layerManager.getCanvas(LayerType.Interaction);
@@ -147,6 +152,7 @@ export class GlideChart {
       createLayer(LayerType.Axis, axisCanvas, axisCtx, () => {
         axisCtx.clearRect(0, 0, axisCanvas.width, axisCanvas.height);
         this.yAxisRenderer.draw();
+        this.xAxisRenderer.draw();
       }),
       createLayer(LayerType.Data, dataCanvas, dataCtx, () => {
         this.dataLayerRenderer.draw();
@@ -278,10 +284,11 @@ export class GlideChart {
       };
     }
 
-    // Recreate YAxisRenderer with new config
+    // Recreate YAxisRenderer and XAxisRenderer with new config
     const axisCtxNew = this.layerManager.getContext(LayerType.Axis);
     const axisCanvasNew = this.layerManager.getCanvas(LayerType.Axis);
     this.yAxisRenderer = new YAxisRenderer(axisCtxNew, axisCanvasNew, this.scale, this.resolvedConfig);
+    this.xAxisRenderer = new XAxisRenderer(axisCtxNew, axisCanvasNew, this.scale, this.resolvedConfig);
 
     // Update axis layer draw callback
     const axisLayer = this.layers.find((l) => l.type === LayerType.Axis);
@@ -289,6 +296,7 @@ export class GlideChart {
       axisLayer.draw = () => {
         axisCtxNew.clearRect(0, 0, axisCanvasNew.width, axisCanvasNew.height);
         this.yAxisRenderer.draw();
+        this.xAxisRenderer.draw();
       };
     }
 
@@ -348,6 +356,7 @@ export class GlideChart {
     this.dataLayerRenderer = null!;
     this.backgroundLayerRenderer = null!;
     this.yAxisRenderer = null!;
+    this.xAxisRenderer = null!;
     this.resolvedConfig = null!;
     this.userConfig = null!;
     this.layerManager = null!;
@@ -416,7 +425,9 @@ export class GlideChart {
 
   private handleResize(width: number, height: number, dpr: number): void {
     if (this.destroyed || !this.initialized) return;
-    this.scale.update(width, height, dpr);
+    const minWidth = DEFAULT_PADDING.left + DEFAULT_PADDING.right + 1;
+    const minHeight = DEFAULT_PADDING.top + DEFAULT_PADDING.bottom + 1;
+    this.scale.update(Math.max(minWidth, width), Math.max(minHeight, height), dpr);
     this.autoFitScale();
     this.frameScheduler.markAllDirty();
   }

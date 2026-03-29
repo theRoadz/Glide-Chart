@@ -37,6 +37,7 @@ export interface AxisConfig {
   tickColor: string;
   tickLength: number;
   labelFormatter?: (value: number) => string;
+  timezone?: string;
 }
 
 export interface CrosshairConfig {

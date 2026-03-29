@@ -24,7 +24,12 @@ export function deepMerge<T>(target: T, source: Partial<T>): T {
     const sourceVal = (source as Record<string, unknown>)[key];
     const targetVal = result[key];
 
-    if (sourceVal === undefined || sourceVal === null) {
+    if (sourceVal === undefined) {
+      continue;
+    }
+
+    if (sourceVal === null) {
+      delete result[key];
       continue;
     }
 
