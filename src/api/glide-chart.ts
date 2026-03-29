@@ -128,6 +128,7 @@ export class GlideChart {
       dataCanvas,
       this.scale,
       this.buildSeriesRenderData(),
+      this.resolvedConfig.animation,
     );
 
     // 8. Create BackgroundLayerRenderer
@@ -156,6 +157,9 @@ export class GlideChart {
       }),
       createLayer(LayerType.Data, dataCanvas, dataCtx, () => {
         this.dataLayerRenderer.draw();
+        if (this.dataLayerRenderer.needsNextFrame) {
+          this.frameScheduler.markDirty(LayerType.Data);
+        }
       }),
       createLayer(LayerType.Interaction, interCanvas, interCtx, () => {
         interCtx.clearRect(0, 0, interCanvas.width, interCanvas.height);
@@ -176,6 +180,10 @@ export class GlideChart {
   addData(seriesId: string, point: DataPoint | DataPoint[]): void {
     this.assertNotDestroyed();
     const state = this.getSeriesOrThrow(seriesId);
+
+    if (this.resolvedConfig.animation.enabled) {
+      this.dataLayerRenderer.snapshotCurveState();
+    }
 
     if (Array.isArray(point)) {
       // Validate all points before mutating buffer (atomic batch)
@@ -205,6 +213,10 @@ export class GlideChart {
     this.assertNotDestroyed();
     const state = this.getSeriesOrThrow(seriesId);
 
+    if (this.resolvedConfig.animation.enabled) {
+      this.dataLayerRenderer.snapshotCurveState();
+    }
+
     state.buffer.clear();
     for (const p of points) {
       validateDataPoint(p);
@@ -212,7 +224,10 @@ export class GlideChart {
     }
     state.splineCache.computeFull();
 
-    this.autoFitScale();
+    const scaleChanged = this.autoFitScale();
+    if (scaleChanged && this.resolvedConfig.animation.enabled) {
+      this.dataLayerRenderer.cancelAnimation();
+    }
     this.frameScheduler.markDirty(LayerType.Data);
     this.frameScheduler.markDirty(LayerType.Axis);
     this.frameScheduler.markDirty(LayerType.Background);
@@ -220,6 +235,7 @@ export class GlideChart {
 
   clearData(seriesId?: string): void {
     this.assertNotDestroyed();
+    this.dataLayerRenderer.cancelAnimation();
 
     if (seriesId !== undefined) {
       const state = this.getSeriesOrThrow(seriesId);
@@ -317,6 +333,7 @@ export class GlideChart {
       dataCanvas,
       this.scale,
       this.buildSeriesRenderData(),
+      this.resolvedConfig.animation,
     );
 
     // Update data layer draw callback
@@ -324,6 +341,9 @@ export class GlideChart {
     if (dataLayer) {
       dataLayer.draw = () => {
         this.dataLayerRenderer.draw();
+        if (this.dataLayerRenderer.needsNextFrame) {
+          this.frameScheduler.markDirty(LayerType.Data);
+        }
       };
     }
 

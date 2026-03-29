@@ -168,7 +168,7 @@
 <body>
   <div class="header">
     <h1>GlideChart</h1>
-    <span class="subtitle">Developer Demo — Epic 2 Visual Verification</span>
+    <span class="subtitle">Developer Demo — Real-Time Streaming & Multi-Series</span>
   </div>
 
   <div class="controls">
@@ -192,6 +192,24 @@
     <div id="chart-container" class="chart-wrapper"></div>
     <div class="section-label">Multi-Series (Price + Reference Line)</div>
     <div id="chart-multi" class="chart-wrapper"></div>
+    <div class="section-label">Real-Time Streaming Demo</div>
+    <div class="controls" id="streaming-controls">
+      <button id="btn-stream-start">Start Streaming</button>
+      <button id="btn-stream-stop" disabled>Stop Streaming</button>
+      <div class="divider"></div>
+      <label style="color: var(--text-muted); font-size: 13px;">Speed:
+        <select id="stream-speed" style="padding: 6px 8px; border: 1px solid var(--btn-border); border-radius: 6px; background: var(--btn-bg); color: var(--btn-text); font-size: 13px;">
+          <option value="100">100ms</option>
+          <option value="200">200ms</option>
+          <option value="400" selected>400ms</option>
+          <option value="1000">1000ms</option>
+        </select>
+      </label>
+      <div class="divider"></div>
+      <span style="font-size: 12px; color: var(--text-muted);">Points: <strong id="stream-point-count">50</strong></span>
+      <span style="font-size: 12px; color: var(--text-muted);">FPS: <strong id="stream-fps">0</strong></span>
+    </div>
+    <div id="chart-stream" class="chart-wrapper"></div>
   </div>
 
   <script type="module">
@@ -477,6 +495,150 @@
 
     createChart();
     createMultiChart();
+
+    // --- Streaming Demo (Section 3) ---
+
+    const streamContainer = document.getElementById('chart-stream');
+    const btnStreamStart = document.getElementById('btn-stream-start');
+    const btnStreamStop = document.getElementById('btn-stream-stop');
+    const streamSpeedSelect = document.getElementById('stream-speed');
+    const streamPointCount = document.getElementById('stream-point-count');
+    const streamFps = document.getElementById('stream-fps');
+
+    let streamChart = null;
+    let streamInterval = null;
+    let streamLastTimestamp = 0;
+    let streamLastPrice = 100;
+    let streamPoints = 0;
+
+    // FPS counter
+    let fpsFrameCount = 0;
+    let fpsLastTime = performance.now();
+    let fpsRafId = null;
+
+    function updateFps() {
+      fpsFrameCount++;
+      const now = performance.now();
+      if (now - fpsLastTime >= 1000) {
+        streamFps.textContent = fpsFrameCount.toString();
+        fpsFrameCount = 0;
+        fpsLastTime = now;
+      }
+      fpsRafId = requestAnimationFrame(updateFps);
+    }
+
+    function createStreamChart() {
+      const startTimestamp = Date.now() - 50 * 400;
+      const initialData = [];
+      let price = 100;
+      for (let i = 0; i < 50; i++) {
+        price += (Math.random() - 0.5) * 3;
+        initialData.push({ timestamp: startTimestamp + i * 400, value: price });
+      }
+
+      streamLastTimestamp = startTimestamp + 49 * 400;
+      streamLastPrice = price;
+      streamPoints = 50;
+
+      streamChart = new GlideChart(streamContainer, {
+        theme: currentTheme,
+        animation: { enabled: true, duration: 300 },
+        series: [
+          {
+            id: 'live',
+            data: initialData,
+            line: { color: '#00d4aa', width: 2 },
+            gradient: { enabled: true, topColor: '#00d4aa', bottomColor: '#00d4aa', topOpacity: 0.3, bottomOpacity: 0 },
+          },
+        ],
+      });
+
+      streamPointCount.textContent = streamPoints.toString();
+    }
+
+    btnStreamStart.addEventListener('click', () => {
+      if (streamInterval) return;
+      const speed = parseInt(streamSpeedSelect.value, 10);
+      streamInterval = setInterval(() => {
+        if (!streamChart) return;
+        streamLastTimestamp += speed;
+        streamLastPrice += (Math.random() - 0.5) * 3;
+        if (streamLastPrice < 1) streamLastPrice = 1 + Math.random() * 2;
+
+        streamChart.addData('live', { timestamp: streamLastTimestamp, value: streamLastPrice });
+        streamPoints++;
+        streamPointCount.textContent = streamPoints.toString();
+      }, speed);
+
+      btnStreamStart.disabled = true;
+      btnStreamStop.disabled = false;
+      btnStreamStart.classList.add('active');
+
+      // Start FPS counter
+      fpsFrameCount = 0;
+      fpsLastTime = performance.now();
+      fpsRafId = requestAnimationFrame(updateFps);
+    });
+
+    btnStreamStop.addEventListener('click', () => {
+      if (streamInterval) {
+        clearInterval(streamInterval);
+        streamInterval = null;
+      }
+      if (fpsRafId) {
+        cancelAnimationFrame(fpsRafId);
+        fpsRafId = null;
+      }
+      btnStreamStart.disabled = false;
+      btnStreamStop.disabled = true;
+      btnStreamStart.classList.remove('active');
+    });
+
+    streamSpeedSelect.addEventListener('change', () => {
+      if (streamInterval) {
+        // Restart with new speed
+        clearInterval(streamInterval);
+        streamInterval = null;
+        if (fpsRafId) {
+          cancelAnimationFrame(fpsRafId);
+          fpsRafId = null;
+        }
+        btnStreamStart.click();
+      }
+    });
+
+    // Sync theme toggle with streaming chart
+    btnTheme.addEventListener('click', () => {
+      if (streamChart) {
+        streamChart.setConfig({ theme: currentTheme });
+      }
+    });
+
+    // Sync destroy/recreate with streaming chart
+    btnDestroy.addEventListener('click', () => {
+      if (streamChart && chart === null) {
+        // Destroying
+        if (streamInterval) {
+          clearInterval(streamInterval);
+          streamInterval = null;
+        }
+        if (fpsRafId) {
+          cancelAnimationFrame(fpsRafId);
+          fpsRafId = null;
+        }
+        streamChart.destroy();
+        streamChart = null;
+        btnStreamStart.disabled = true;
+        btnStreamStop.disabled = true;
+      } else if (!streamChart && chart !== null) {
+        // Recreating
+        createStreamChart();
+        btnStreamStart.disabled = false;
+        btnStreamStop.disabled = true;
+      }
+    });
+
+    createStreamChart();
   </script>
 </body>
 </html>

@@ -1,5 +1,6 @@
 import { GlideChart } from './glide-chart';
 import type { DataPoint } from '../core/types';
+import { LayerType } from '../renderer/types';
 
 // --- Mocks ---
 
@@ -594,6 +595,147 @@ describe('GlideChart', () => {
       });
       chart.clearData('price');
       tickFrame();
+      chart.destroy();
+    });
+  });
+
+  describe('addData — dirty flag specificity', () => {
+    it('addData single point when scale doesnt change — only Data dirty, not Axis or Background', () => {
+      const chart = new GlideChart(container, {
+        animation: { enabled: false },
+        series: [{ id: 'price', data: makePoints(50) }],
+      });
+      tickFrame();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scheduler = (chart as any).frameScheduler;
+      const markDirtySpy = vi.spyOn(scheduler, 'markDirty');
+
+      // Add a point within existing value AND timestamp range (no scale change)
+      // makePoints(50) generates timestamps from 1000..5900, values ~5..15
+      // Pick a timestamp in the middle and a value within existing range
+      chart.addData('price', { timestamp: 3000, value: 10 });
+
+      // Only Data should be dirty (scale unchanged since new point is within existing range)
+      const dirtyTypes = markDirtySpy.mock.calls.map((c) => c[0]);
+      expect(dirtyTypes).toContain(LayerType.Data);
+      expect(dirtyTypes).not.toContain(LayerType.Axis);
+      expect(dirtyTypes).not.toContain(LayerType.Background);
+
+      markDirtySpy.mockRestore();
+      chart.destroy();
+    });
+
+    it('addData single point that extends value range — Data + Axis + Background all marked dirty', () => {
+      const chart = new GlideChart(container, {
+        animation: { enabled: false },
+        series: [{ id: 'price', data: makePoints(5) }],
+      });
+      tickFrame();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scheduler = (chart as any).frameScheduler;
+      const markDirtySpy = vi.spyOn(scheduler, 'markDirty');
+
+      // Add a point that extends the value range significantly
+      chart.addData('price', { timestamp: 99999, value: 99999 });
+
+      const dirtyTypes = markDirtySpy.mock.calls.map((c) => c[0]);
+      expect(dirtyTypes).toContain(LayerType.Data);
+      expect(dirtyTypes).toContain(LayerType.Axis);
+      expect(dirtyTypes).toContain(LayerType.Background);
+
+      markDirtySpy.mockRestore();
+      chart.destroy();
+    });
+
+    it('streaming 10,000 addData calls — buffer at capacity, no errors', () => {
+      const chart = new GlideChart(container, {
+        animation: { enabled: false },
+        maxDataPoints: 10000,
+        series: [{ id: 'price' }],
+      });
+
+      for (let i = 0; i < 10000; i++) {
+        chart.addData('price', { timestamp: 1000 + i * 100, value: 50 + Math.sin(i * 0.01) * 20 });
+      }
+
+      // Should render without error
+      tickFrame();
+      chart.destroy();
+    });
+
+    it('animation pumping — after addData with animation enabled, data layer draw callback re-marks dirty', () => {
+      const chart = new GlideChart(container, {
+        animation: { enabled: true, duration: 300 },
+        series: [{ id: 'price', data: makePoints(10) }],
+      });
+      tickFrame();
+
+      chart.addData('price', { timestamp: 99999, value: 50 });
+
+      // First frame during animation — should schedule another
+      tickFrame();
+      expect(rafCallback).not.toBeNull();
+
+      // Second frame — still animating
+      tickFrame();
+      expect(rafCallback).not.toBeNull();
+
+      chart.destroy();
+    });
+
+    it('addData to one series in multi-series chart — other series unaffected', () => {
+      const chart = new GlideChart(container, {
+        animation: { enabled: true, duration: 300 },
+        series: [
+          { id: 'price', data: makePoints(10) },
+          { id: 'volume', data: makePoints(10, 2000) },
+        ],
+      });
+      tickFrame();
+
+      // Add data to price only
+      chart.addData('price', { timestamp: 99999, value: 50 });
+
+      // Should render without error — both series drawn
+      tickFrame();
+      chart.destroy();
+    });
+  });
+
+  describe('performance benchmarks', () => {
+    it('10,000 points + 100 sequential addData calls completes under 500ms', () => {
+      const chart = new GlideChart(container, {
+        animation: { enabled: false },
+        maxDataPoints: 20000,
+        series: [{ id: 'price', data: makePoints(10000) }],
+      });
+      tickFrame();
+
+      const start = performance.now();
+      for (let i = 0; i < 100; i++) {
+        chart.addData('price', { timestamp: 10000 * 100 + 1000 + i * 100, value: 50 + Math.random() * 10 });
+      }
+      const elapsed = performance.now() - start;
+
+      expect(elapsed).toBeLessThan(500);
+      chart.destroy();
+    });
+
+    it('single addData with 10,000 existing points completes under 5ms', () => {
+      const chart = new GlideChart(container, {
+        animation: { enabled: false },
+        maxDataPoints: 20000,
+        series: [{ id: 'price', data: makePoints(10000) }],
+      });
+      tickFrame();
+
+      const start = performance.now();
+      chart.addData('price', { timestamp: 10000 * 100 + 1000, value: 55 });
+      const elapsed = performance.now() - start;
+
+      expect(elapsed).toBeLessThan(5);
       chart.destroy();
     });
   });

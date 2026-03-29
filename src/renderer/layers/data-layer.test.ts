@@ -4,7 +4,7 @@ import { RingBuffer } from '../../core/ring-buffer';
 import { SplineCache } from '../../core/spline-cache';
 import { Scale } from '../../core/scale';
 import type { DataPoint } from '../../core/types';
-import type { ResolvedSeriesConfig } from '../../config/types';
+import type { ResolvedSeriesConfig, AnimationConfig } from '../../config/types';
 
 function makeScale(): Scale {
   return new Scale({
@@ -69,12 +69,15 @@ function createCanvas(): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContex
   return { canvas, ctx };
 }
 
+const ANIM_OFF: Readonly<AnimationConfig> = { enabled: false, duration: 0 };
+const ANIM_ON: Readonly<AnimationConfig> = { enabled: true, duration: 300 };
+
 describe('DataLayerRenderer', () => {
   describe('draw() — empty and edge cases', () => {
     it('empty series data renders nothing (no errors, only clearRect)', () => {
       const { canvas, ctx } = createCanvas();
       const scale = makeScale();
-      const renderer = new DataLayerRenderer(ctx, canvas, scale, []);
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [], ANIM_OFF);
 
       renderer.draw();
 
@@ -86,7 +89,7 @@ describe('DataLayerRenderer', () => {
       const { canvas, ctx } = createCanvas();
       const scale = makeScale();
       const series = makeSeries([]);
-      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series]);
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series], ANIM_OFF);
 
       renderer.draw();
 
@@ -112,7 +115,7 @@ describe('DataLayerRenderer', () => {
         config: makeSeriesConfig(),
       };
 
-      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series]);
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series], ANIM_OFF);
       renderer.draw();
 
       expect(ctx.arc).toHaveBeenCalled();
@@ -124,7 +127,7 @@ describe('DataLayerRenderer', () => {
       const { canvas, ctx } = createCanvas();
       const scale = makeScale();
       const series = makeSeries([[1, 10], [2, 20], [3, 30]]);
-      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series]);
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series], ANIM_OFF);
 
       renderer.draw();
 
@@ -141,7 +144,7 @@ describe('DataLayerRenderer', () => {
       scale.setDomainY(0, 100);
 
       const series = makeSeries([[0, 10], [10, 90]]);
-      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series]);
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series], ANIM_OFF);
 
       renderer.draw();
 
@@ -157,7 +160,7 @@ describe('DataLayerRenderer', () => {
       scale.setDomainY(0, 100);
 
       const series = makeSeries([[0, 10], [10, 50], [20, 30], [30, 80], [40, 60]]);
-      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series]);
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series], ANIM_OFF);
 
       renderer.draw();
 
@@ -179,7 +182,7 @@ describe('DataLayerRenderer', () => {
 
       const config = makeSeriesConfig({ lineOpacity: 0.7 });
       const series = makeSeries([[0, 10], [10, 90]], config);
-      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series]);
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series], ANIM_OFF);
 
       renderer.draw();
 
@@ -197,7 +200,7 @@ describe('DataLayerRenderer', () => {
 
       const config = makeSeriesConfig({ lineColor: '#ff0000', lineWidth: 3 });
       const series = makeSeries([[0, 10], [10, 90]], config);
-      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series]);
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series], ANIM_OFF);
 
       renderer.draw();
 
@@ -214,7 +217,7 @@ describe('DataLayerRenderer', () => {
       scale.setDomainY(0, 100);
 
       const series = makeSeries([[0, 10], [10, 90]]);
-      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series]);
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series], ANIM_OFF);
 
       renderer.draw();
 
@@ -230,7 +233,7 @@ describe('DataLayerRenderer', () => {
 
       const config = makeSeriesConfig({ gradientEnabled: false });
       const series = makeSeries([[0, 10], [10, 90]], config);
-      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series]);
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series], ANIM_OFF);
 
       renderer.draw();
 
@@ -254,7 +257,7 @@ describe('DataLayerRenderer', () => {
       const series1 = makeSeries([[0, 10], [10, 90]], config1);
       const series2 = makeSeries([[0, 50], [10, 20]], config2);
 
-      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series1, series2]);
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series1, series2], ANIM_OFF);
       renderer.draw();
 
       // stroke should be called twice (once per series)
@@ -273,7 +276,7 @@ describe('DataLayerRenderer', () => {
       const series2 = makeSeries([[0, 50], [10, 20]], makeSeriesConfig({ lineColor: '#00ff00', gradientEnabled: false }));
       const series3 = makeSeries([[0, 30], [10, 70]], makeSeriesConfig({ lineColor: '#0000ff', gradientEnabled: false }));
 
-      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series1, series2, series3]);
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series1, series2, series3], ANIM_OFF);
       renderer.draw();
 
       expect((ctx.stroke as ReturnType<typeof vi.fn>).mock.calls.length).toBe(3);
@@ -288,7 +291,7 @@ describe('DataLayerRenderer', () => {
       const seriesA = makeSeries([[0, 10], [10, 90]], makeSeriesConfig({ gradientEnabled: true }));
       const seriesB = makeSeries([[0, 50], [10, 20]], makeSeriesConfig({ gradientEnabled: false }));
 
-      const renderer = new DataLayerRenderer(ctx, canvas, scale, [seriesA, seriesB]);
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [seriesA, seriesB], ANIM_OFF);
       renderer.draw();
 
       // createLinearGradient called once (only for series A)
@@ -316,7 +319,7 @@ describe('DataLayerRenderer', () => {
       }
       const seriesB = makeSeries(pointsB, makeSeriesConfig({ lineColor: '#00ff00', gradientEnabled: false }));
 
-      const renderer = new DataLayerRenderer(ctx, canvas, scale, [seriesA, seriesB]);
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [seriesA, seriesB], ANIM_OFF);
       renderer.draw();
 
       // Both series rendered (2 stroke calls)
@@ -332,7 +335,7 @@ describe('DataLayerRenderer', () => {
       const emptySeries = makeSeries([], makeSeriesConfig({ lineColor: '#ff0000', gradientEnabled: false }));
       const populatedSeries = makeSeries([[0, 10], [10, 90]], makeSeriesConfig({ lineColor: '#00ff00', gradientEnabled: false }));
 
-      const renderer = new DataLayerRenderer(ctx, canvas, scale, [emptySeries, populatedSeries]);
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [emptySeries, populatedSeries], ANIM_OFF);
       renderer.draw();
 
       // Only 1 stroke call — empty series skipped
@@ -361,7 +364,7 @@ describe('DataLayerRenderer', () => {
       scale.setDomainX(0, 4999);
       scale.setDomainY(0, 100);
 
-      const renderer = new DataLayerRenderer(ctx, canvas, scale, seriesArr);
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, seriesArr, ANIM_OFF);
 
       const start = performance.now();
       renderer.draw();
@@ -409,7 +412,7 @@ describe('DataLayerRenderer', () => {
         config: makeSeriesConfig(),
       };
 
-      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series]);
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series], ANIM_OFF);
 
       // Note: Canvas mock overhead makes timing unreliable for strict 16ms assertion.
       // We verify it completes without error and measure indicatively.
@@ -420,6 +423,244 @@ describe('DataLayerRenderer', () => {
       // With canvas mocks, this won't be real rendering perf, but should still be fast
       // If this exceeds 500ms even with mocks, something is algorithmically wrong
       expect(elapsed).toBeLessThan(500);
+    });
+  });
+
+  describe('animation — disabled', () => {
+    it('draw() renders immediately, needsNextFrame is false, no performance.now() calls', () => {
+      const { canvas, ctx } = createCanvas();
+      const scale = makeScale();
+      scale.setDomainX(0, 10);
+      scale.setDomainY(0, 100);
+
+      const series = makeSeries([[0, 10], [10, 90]]);
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series], ANIM_OFF);
+
+      const perfSpy = vi.spyOn(performance, 'now');
+      renderer.draw();
+
+      expect(renderer.needsNextFrame).toBe(false);
+      expect(renderer.isAnimating).toBe(false);
+      // performance.now() should not be called during draw when animation is disabled
+      expect(perfSpy).not.toHaveBeenCalled();
+      expect(ctx.stroke).toHaveBeenCalled();
+
+      perfSpy.mockRestore();
+    });
+  });
+
+  describe('animation — enabled', () => {
+    it('after snapshotCurveState, needsNextFrame is true and draws interpolate toward final state', () => {
+      const { canvas, ctx } = createCanvas();
+      const scale = makeScale();
+      scale.setDomainX(0, 10);
+      scale.setDomainY(0, 100);
+
+      const buffer = new RingBuffer<DataPoint>(10000);
+      buffer.push({ timestamp: 0, value: 10 });
+      buffer.push({ timestamp: 10, value: 90 });
+      const splineCache = new SplineCache(buffer);
+      splineCache.computeFull();
+
+      const series: SeriesRenderData = {
+        buffer,
+        splineCache,
+        config: makeSeriesConfig(),
+      };
+
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series], ANIM_ON);
+
+      // Snapshot current state
+      renderer.snapshotCurveState();
+
+      // Mutate data (add point)
+      buffer.push({ timestamp: 15, value: 50 });
+      scale.setDomainX(0, 15);
+      splineCache.computeFull();
+
+      // Draw partway through animation
+      vi.spyOn(performance, 'now').mockReturnValue(performance.now() + 150); // half of 300ms
+      renderer.draw();
+
+      expect(renderer.needsNextFrame).toBe(true);
+      expect(renderer.isAnimating).toBe(true);
+      expect(ctx.stroke).toHaveBeenCalled();
+
+      vi.restoreAllMocks();
+    });
+
+    it('animation completes when elapsed >= duration — final frame renders exact target, needsNextFrame is false', () => {
+      const { canvas, ctx } = createCanvas();
+      const scale = makeScale();
+      scale.setDomainX(0, 10);
+      scale.setDomainY(0, 100);
+
+      const buffer = new RingBuffer<DataPoint>(10000);
+      buffer.push({ timestamp: 0, value: 10 });
+      buffer.push({ timestamp: 10, value: 90 });
+      const splineCache = new SplineCache(buffer);
+      splineCache.computeFull();
+
+      const series: SeriesRenderData = {
+        buffer,
+        splineCache,
+        config: makeSeriesConfig(),
+      };
+
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series], ANIM_ON);
+
+      renderer.snapshotCurveState();
+
+      buffer.push({ timestamp: 15, value: 50 });
+      scale.setDomainX(0, 15);
+      splineCache.computeFull();
+
+      // Jump past animation duration
+      vi.spyOn(performance, 'now').mockReturnValue(performance.now() + 500);
+      renderer.draw();
+
+      expect(renderer.needsNextFrame).toBe(false);
+      expect(renderer.isAnimating).toBe(false);
+
+      vi.restoreAllMocks();
+    });
+
+    it('rapid successive snapshotCurveState calls during animation — new animation starts from current interpolated position', () => {
+      const { canvas, ctx } = createCanvas();
+      const scale = makeScale();
+      scale.setDomainX(0, 10);
+      scale.setDomainY(0, 100);
+
+      const buffer = new RingBuffer<DataPoint>(10000);
+      buffer.push({ timestamp: 0, value: 10 });
+      buffer.push({ timestamp: 10, value: 90 });
+      const splineCache = new SplineCache(buffer);
+      splineCache.computeFull();
+
+      const series: SeriesRenderData = {
+        buffer,
+        splineCache,
+        config: makeSeriesConfig(),
+      };
+
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series], ANIM_ON);
+
+      const baseTime = performance.now();
+
+      // First snapshot + mutation
+      vi.spyOn(performance, 'now').mockReturnValue(baseTime);
+      renderer.snapshotCurveState();
+      buffer.push({ timestamp: 15, value: 50 });
+      scale.setDomainX(0, 15);
+      splineCache.computeFull();
+
+      // Draw partway through
+      (performance.now as ReturnType<typeof vi.fn>).mockReturnValue(baseTime + 150);
+      renderer.draw();
+      expect(renderer.isAnimating).toBe(true);
+
+      // Second snapshot during animation — captures interpolated position
+      (performance.now as ReturnType<typeof vi.fn>).mockReturnValue(baseTime + 150);
+      renderer.snapshotCurveState();
+
+      // Mutate again
+      buffer.push({ timestamp: 20, value: 70 });
+      scale.setDomainX(0, 20);
+      splineCache.computeFull();
+
+      // Draw at new animation midpoint
+      (performance.now as ReturnType<typeof vi.fn>).mockReturnValue(baseTime + 300);
+      renderer.draw();
+      expect(renderer.isAnimating).toBe(true);
+
+      // Draw after new animation completes
+      (performance.now as ReturnType<typeof vi.fn>).mockReturnValue(baseTime + 500);
+      renderer.draw();
+      expect(renderer.isAnimating).toBe(false);
+      expect(renderer.needsNextFrame).toBe(false);
+
+      vi.restoreAllMocks();
+    });
+
+    it('snapshotCurveState with multi-series — each series animates independently', () => {
+      const { canvas, ctx } = createCanvas();
+      const scale = makeScale();
+      scale.setDomainX(0, 10);
+      scale.setDomainY(0, 100);
+
+      const buffer1 = new RingBuffer<DataPoint>(10000);
+      buffer1.push({ timestamp: 0, value: 10 });
+      buffer1.push({ timestamp: 10, value: 90 });
+      const spline1 = new SplineCache(buffer1);
+      spline1.computeFull();
+
+      const buffer2 = new RingBuffer<DataPoint>(10000);
+      buffer2.push({ timestamp: 0, value: 50 });
+      buffer2.push({ timestamp: 10, value: 20 });
+      const spline2 = new SplineCache(buffer2);
+      spline2.computeFull();
+
+      const series1: SeriesRenderData = { buffer: buffer1, splineCache: spline1, config: makeSeriesConfig({ lineColor: '#ff0000', gradientEnabled: false }) };
+      const series2: SeriesRenderData = { buffer: buffer2, splineCache: spline2, config: makeSeriesConfig({ lineColor: '#00ff00', gradientEnabled: false }) };
+
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series1, series2], ANIM_ON);
+
+      // Snapshot both series
+      renderer.snapshotCurveState();
+
+      // Mutate both
+      buffer1.push({ timestamp: 15, value: 50 });
+      buffer2.push({ timestamp: 15, value: 80 });
+      scale.setDomainX(0, 15);
+      spline1.computeFull();
+      spline2.computeFull();
+
+      vi.spyOn(performance, 'now').mockReturnValue(performance.now() + 150);
+      renderer.draw();
+
+      expect(renderer.needsNextFrame).toBe(true);
+      // Both series rendered (2 stroke calls)
+      expect((ctx.stroke as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2);
+
+      vi.restoreAllMocks();
+    });
+
+    it('different-length path buffers (new point extends curve) — extra points lerp from last previous position', () => {
+      const { canvas, ctx } = createCanvas();
+      const scale = makeScale();
+      scale.setDomainX(0, 10);
+      scale.setDomainY(0, 100);
+
+      const buffer = new RingBuffer<DataPoint>(10000);
+      buffer.push({ timestamp: 0, value: 10 });
+      buffer.push({ timestamp: 5, value: 50 });
+      const splineCache = new SplineCache(buffer);
+      splineCache.computeFull();
+
+      const series: SeriesRenderData = {
+        buffer,
+        splineCache,
+        config: makeSeriesConfig({ gradientEnabled: false }),
+      };
+
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series], ANIM_ON);
+
+      // Snapshot with 2 points
+      renderer.snapshotCurveState();
+
+      // Add a 3rd point — extends the curve
+      buffer.push({ timestamp: 10, value: 30 });
+      scale.setDomainX(0, 10);
+      splineCache.computeFull();
+
+      // Draw at midpoint — the extended portion should be interpolated
+      vi.spyOn(performance, 'now').mockReturnValue(performance.now() + 150);
+      renderer.draw();
+
+      expect(renderer.needsNextFrame).toBe(true);
+      expect(ctx.stroke).toHaveBeenCalled();
+
+      vi.restoreAllMocks();
     });
   });
 });

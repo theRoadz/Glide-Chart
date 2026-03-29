@@ -52,3 +52,7 @@
 
 - ~~**`setConfig` ignores `data` arrays on new series entries (silent data loss)**~~ — Fixed: `setConfig` now populates buffer from `userConfig.series[].data` for new series.
 - ~~**Demo `multiChart` excluded from streaming/clear/random button flows**~~ — Fixed: clear and random buttons now sync multiChart.
+
+## ~~Deferred from: code review of 3-1-incremental-data-push-and-animation (2026-03-29)~~
+
+- ~~**Constructor allocates animation buffers even when `animation.enabled = false`**~~ — Fixed: skip `interpBuf`/`prevPathBufs` allocation when animation is disabled or duration <= 0.
