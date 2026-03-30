@@ -1,4 +1,4 @@
-import type { PointerState, PointerCallback, WheelState, WheelCallback } from './types';
+import type { PointerState, PointerCallback, WheelState, WheelCallback, PinchState, PinchCallback } from './types';
 
 export class EventDispatcher {
   private container: HTMLElement;
@@ -13,13 +13,27 @@ export class EventDispatcher {
   private wheelState: WheelState = { x: 0, y: 0, deltaY: 0 };
   private currentWheelEvent: WheelEvent | null = null;
   private boundWheel: (e: WheelEvent) => void;
+  private pinchSubscribers: PinchCallback[] = [];
+  private pinchState: PinchState = { centerX: 0, centerY: 0, scale: 1 };
+  private pinchPointers: Map<number, { x: number; y: number }> = new Map();
+  private pinchStartDistance: number = 0;
+  private isPinching: boolean = false;
+  private wasPinching: boolean = false;
+  private originalTouchAction: string = '';
+  private touchActionOverridden: boolean = false;
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, options?: { disableTouchAction?: boolean }) {
     if (!(container instanceof HTMLElement)) {
       throw new Error('EventDispatcher: container element is required');
     }
 
     this.container = container;
+
+    if (options?.disableTouchAction) {
+      this.originalTouchAction = container.style.touchAction;
+      container.style.touchAction = 'none';
+      this.touchActionOverridden = true;
+    }
 
     this.boundPointermove = (e: PointerEvent) => this.handlePointermove(e);
     this.boundPointerleave = (e: PointerEvent) => this.handlePointerleave(e);
@@ -52,6 +66,14 @@ export class EventDispatcher {
     };
   }
 
+  subscribePinch(callback: PinchCallback): () => void {
+    this.pinchSubscribers.push(callback);
+    return () => {
+      const idx = this.pinchSubscribers.indexOf(callback);
+      if (idx !== -1) this.pinchSubscribers.splice(idx, 1);
+    };
+  }
+
   preventWheel(): void {
     this.currentWheelEvent?.preventDefault();
   }
@@ -65,13 +87,52 @@ export class EventDispatcher {
     this.container.removeEventListener('wheel', this.boundWheel);
     this.subscribers.length = 0;
     this.wheelSubscribers.length = 0;
+    this.pinchSubscribers.length = 0;
+    this.pinchPointers.clear();
+    this.isPinching = false;
+    this.wasPinching = false;
+    if (this.touchActionOverridden) {
+      this.container.style.touchAction = this.originalTouchAction;
+    }
   }
 
   private handlePointermove(e: PointerEvent): void {
     this.state.x = e.offsetX;
     this.state.y = e.offsetY;
     this.state.pointerType = e.pointerType;
-    this.state.active = true;
+
+    if (this.isPinching && e.pointerType === 'touch' && this.pinchPointers.has(e.pointerId)) {
+      this.pinchPointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+      const iter = this.pinchPointers.values();
+      const p1 = iter.next().value!;
+      const p2 = iter.next().value!;
+      const newDistance = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      if (this.pinchStartDistance === 0) {
+        this.pinchStartDistance = newDistance;
+        this.state.active = false;
+        this.notify();
+        return;
+      }
+      const scale = newDistance / this.pinchStartDistance;
+      this.pinchState.centerX = (p1.x + p2.x) / 2;
+      this.pinchState.centerY = (p1.y + p2.y) / 2;
+      this.pinchState.scale = scale;
+      try {
+        this.notifyPinch();
+      } finally {
+        this.pinchStartDistance = newDistance;
+        this.state.active = false;
+        this.notify();
+      }
+      return;
+    }
+
+    // Suppress crosshair for remaining touch finger after pinch ends
+    if (this.wasPinching && e.pointerType === 'touch') {
+      this.state.active = false;
+    } else {
+      this.state.active = true;
+    }
     this.notify();
   }
 
@@ -89,6 +150,20 @@ export class EventDispatcher {
     this.state.pointerType = e.pointerType;
     this.state.active = true;
     this.notify();
+
+    if (e.pointerType === 'touch') {
+      try { this.container.setPointerCapture(e.pointerId); } catch { /* may not be supported */ }
+      if (this.pinchPointers.size < 2) {
+        this.pinchPointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+        if (this.pinchPointers.size === 2) {
+          const iter = this.pinchPointers.values();
+          const p1 = iter.next().value!;
+          const p2 = iter.next().value!;
+          this.pinchStartDistance = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+          this.isPinching = true;
+        }
+      }
+    }
   }
 
   private handlePointerup(e: PointerEvent): void {
@@ -96,6 +171,21 @@ export class EventDispatcher {
     this.state.y = e.offsetY;
     this.state.pointerType = e.pointerType;
     this.state.active = false;
+
+    if (e.pointerType === 'touch') {
+      try { this.container.releasePointerCapture(e.pointerId); } catch { /* may already be released */ }
+      this.pinchPointers.delete(e.pointerId);
+      if (this.isPinching && this.pinchPointers.size < 2) {
+        this.isPinching = false;
+        this.wasPinching = true;
+        this.pinchStartDistance = 0;
+        this.pinchPointers.clear();
+      }
+      if (this.pinchPointers.size === 0) {
+        this.wasPinching = false;
+      }
+    }
+
     this.notify();
   }
 
@@ -122,6 +212,13 @@ export class EventDispatcher {
     for (let i = 0; i < this.wheelSubscribers.length; i++) {
       const cb = this.wheelSubscribers[i];
       if (cb) cb(this.wheelState);
+    }
+  }
+
+  private notifyPinch(): void {
+    for (let i = 0; i < this.pinchSubscribers.length; i++) {
+      const cb = this.pinchSubscribers[i];
+      if (cb) cb(this.pinchState);
     }
   }
 }

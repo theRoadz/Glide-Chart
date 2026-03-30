@@ -27,6 +27,14 @@ export interface WheelState {
 
 export type WheelCallback = (state: Readonly<WheelState>) => void;
 
+export interface PinchState {
+  centerX: number;
+  centerY: number;
+  scale: number;
+}
+
+export type PinchCallback = (state: Readonly<PinchState>) => void;
+
 export interface TooltipDataPoint {
   seriesId: string;
   value: number;

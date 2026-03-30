@@ -69,3 +69,7 @@
 
 - ~~**`setConfig` resets stale timestamps to `Date.now()`, masking genuinely stale series**~~ — Fixed: added `getState()`/`restoreState()` to `StaleDetector`; `setConfig` now preserves timestamps and stale state across detector recreation.
 - ~~**Shared mutable Set reference between detector and renderer**~~ — Fixed: `getStaleSeriesIds()` now returns a new `Set` copy instead of the internal reference.
+
+## ~~Deferred from: code review of 4-4-pinch-to-zoom-on-touch-devices (2026-03-30)~~
+
+- ~~**`touch-action: none` set unconditionally, breaks scroll on zoom-disabled charts**~~ — Fixed: added `disableTouchAction` option to `EventDispatcher` constructor, only applied when `zoom !== false` in GlideChart.

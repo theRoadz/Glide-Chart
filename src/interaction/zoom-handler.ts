@@ -1,5 +1,5 @@
 import type { Scale } from '../core/scale';
-import type { WheelState } from './types';
+import type { WheelState, PinchState } from './types';
 import type { ResolvedConfig } from '../config/types';
 import { LayerType } from '../renderer/types';
 
@@ -43,6 +43,33 @@ export class ZoomHandler {
     return this._isZoomed;
   }
 
+  applyZoom(cursorX: number, factor: number, config: ResolvedConfig): void {
+    if (config.zoom === false) return;
+
+    const { min, max } = this.scale.domainX;
+    if (max === min) return;
+
+    const domainWidth = max - min;
+    const leftRatio = (cursorX - min) / domainWidth;
+
+    let newWidth = domainWidth * factor;
+    newWidth = Math.max(MIN_ZOOM_WIDTH, Math.min(MAX_ZOOM_WIDTH, newWidth));
+
+    const newMin = cursorX - newWidth * leftRatio;
+    const newMax = cursorX + newWidth * (1 - leftRatio);
+
+    this.scale.setDomainX(newMin, newMax);
+
+    const values = this.getVisibleValues();
+    this.scale.autoFitY(values);
+
+    this._isZoomed = true;
+
+    this.markDirty(LayerType.Data);
+    this.markDirty(LayerType.Axis);
+    this.markDirty(LayerType.Background);
+  }
+
   handleWheel(wheelState: WheelState, config: ResolvedConfig): void {
     if (config.zoom === false) return;
     if (wheelState.deltaY === 0) return;
@@ -57,42 +84,33 @@ export class ZoomHandler {
       return;
     }
 
-    const { min, max } = this.scale.domainX;
-    if (max === min) return;
-
-    // Compute zoom factor — only sign matters
     const factor = Math.sign(wheelState.deltaY) > 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR;
-
-    // Cursor position in data space
     const cursorX = this.scale.pixelToX(wheelState.x);
 
-    // Ratios for cursor-centered zoom
-    const domainWidth = max - min;
-    const leftRatio = (cursorX - min) / domainWidth;
+    this.applyZoom(cursorX, factor, config);
 
-    // New domain width, clamped
-    let newWidth = domainWidth * factor;
-    newWidth = Math.max(MIN_ZOOM_WIDTH, Math.min(MAX_ZOOM_WIDTH, newWidth));
-
-    // Reposition domain so cursor stays at same data value
-    const newMin = cursorX - newWidth * leftRatio;
-    const newMax = cursorX + newWidth * (1 - leftRatio);
-
-    this.scale.setDomainX(newMin, newMax);
-
-    // Auto-fit Y to visible data (empty array resets to default range)
-    const values = this.getVisibleValues();
-    this.scale.autoFitY(values);
-
-    this._isZoomed = true;
-
-    // Block page scroll since zoom was performed
     this.preventWheelFn();
+  }
 
-    // Mark layers dirty
-    this.markDirty(LayerType.Data);
-    this.markDirty(LayerType.Axis);
-    this.markDirty(LayerType.Background);
+  handlePinch(pinchState: PinchState, config: ResolvedConfig): void {
+    if (config.zoom === false) return;
+    if (pinchState.scale === 1) return;
+    if (pinchState.scale <= 0) return;
+
+    const viewport = this.scale.viewport;
+    if (
+      pinchState.centerX < viewport.x ||
+      pinchState.centerX > viewport.x + viewport.width ||
+      pinchState.centerY < viewport.y ||
+      pinchState.centerY > viewport.y + viewport.height
+    ) {
+      return;
+    }
+
+    const cursorX = this.scale.pixelToX(pinchState.centerX);
+    const factor = 1 / pinchState.scale;
+
+    this.applyZoom(cursorX, factor, config);
   }
 
   resetZoom(): void {

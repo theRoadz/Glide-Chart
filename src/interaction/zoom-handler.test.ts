@@ -1,5 +1,5 @@
 import { ZoomHandler, MIN_ZOOM_WIDTH, MAX_ZOOM_WIDTH } from './zoom-handler';
-import type { WheelState } from './types';
+import type { WheelState, PinchState } from './types';
 import type { ResolvedConfig } from '../config/types';
 import { Scale } from '../core/scale';
 import { LayerType } from '../renderer/types';
@@ -352,6 +352,249 @@ describe('ZoomHandler', () => {
       // Y domain resets to default (0,1) with padding when no visible values
       expect(scale.domainY.min).toBe(0);
       expect(scale.domainY.max).toBe(1);
+    });
+  });
+
+  describe('applyZoom', () => {
+    it('narrows X domain with factor < 1 (zoom in)', () => {
+      const { handler, scale } = createZoomHandler();
+      scale.setDomainX(0, 1000);
+      scale.setDomainY(0, 100);
+      const config = createConfig();
+      const oldWidth = scale.domainX.max - scale.domainX.min;
+
+      handler.applyZoom(500, 0.5, config);
+
+      const newWidth = scale.domainX.max - scale.domainX.min;
+      expect(newWidth).toBeLessThan(oldWidth);
+    });
+
+    it('widens X domain with factor > 1 (zoom out)', () => {
+      const { handler, scale } = createZoomHandler();
+      scale.setDomainX(0, 1000);
+      scale.setDomainY(0, 100);
+      const config = createConfig();
+      const oldWidth = scale.domainX.max - scale.domainX.min;
+
+      handler.applyZoom(500, 2, config);
+
+      const newWidth = scale.domainX.max - scale.domainX.min;
+      expect(newWidth).toBeGreaterThan(oldWidth);
+    });
+
+    it('centers on provided cursorX — cursor data value preserved', () => {
+      const { handler, scale } = createZoomHandler();
+      scale.setDomainX(0, 1000);
+      scale.setDomainY(0, 100);
+      const config = createConfig();
+
+      const cursorX = 250;
+      handler.applyZoom(cursorX, 0.5, config);
+
+      // After zoom, cursorX should still be within the domain at the expected ratio
+      const { min, max } = scale.domainX;
+      const ratio = (cursorX - min) / (max - min);
+      expect(ratio).toBeCloseTo(0.25, 1);
+    });
+
+    it('sets isZoomed = true', () => {
+      const { handler, scale } = createZoomHandler();
+      scale.setDomainX(0, 1000);
+      scale.setDomainY(0, 100);
+      const config = createConfig();
+
+      expect(handler.isZoomed).toBe(false);
+      handler.applyZoom(500, 0.5, config);
+      expect(handler.isZoomed).toBe(true);
+    });
+
+    it('marks Data, Axis, Background layers dirty', () => {
+      const markDirty = vi.fn();
+      const { handler, scale } = createZoomHandler({ markDirty });
+      scale.setDomainX(0, 1000);
+      scale.setDomainY(0, 100);
+      const config = createConfig();
+
+      handler.applyZoom(500, 0.5, config);
+
+      expect(markDirty).toHaveBeenCalledWith(LayerType.Data);
+      expect(markDirty).toHaveBeenCalledWith(LayerType.Axis);
+      expect(markDirty).toHaveBeenCalledWith(LayerType.Background);
+      expect(markDirty).toHaveBeenCalledTimes(3);
+    });
+
+    it('clamps to MIN_ZOOM_WIDTH', () => {
+      const { handler, scale } = createZoomHandler();
+      scale.setDomainX(500, 500 + MIN_ZOOM_WIDTH);
+      scale.setDomainY(0, 100);
+      const config = createConfig();
+
+      handler.applyZoom(500, 0.1, config);
+
+      const newWidth = scale.domainX.max - scale.domainX.min;
+      expect(newWidth).toBeGreaterThanOrEqual(MIN_ZOOM_WIDTH);
+    });
+
+    it('clamps to MAX_ZOOM_WIDTH', () => {
+      const { handler, scale } = createZoomHandler();
+      scale.setDomainX(0, MAX_ZOOM_WIDTH * 0.99);
+      scale.setDomainY(0, 100);
+      const config = createConfig();
+
+      handler.applyZoom(0, 10, config);
+
+      const newWidth = scale.domainX.max - scale.domainX.min;
+      expect(newWidth).toBeLessThanOrEqual(MAX_ZOOM_WIDTH);
+    });
+
+    it('does nothing with degenerate domain (min === max)', () => {
+      const markDirty = vi.fn();
+      const { handler, scale } = createZoomHandler({ markDirty });
+      scale.setDomainX(500, 500);
+      scale.setDomainY(0, 100);
+      const config = createConfig();
+
+      handler.applyZoom(500, 0.5, config);
+
+      expect(markDirty).not.toHaveBeenCalled();
+    });
+
+    it('does nothing with config.zoom === false', () => {
+      const markDirty = vi.fn();
+      const { handler, scale } = createZoomHandler({ markDirty });
+      scale.setDomainX(0, 1000);
+      scale.setDomainY(0, 100);
+      const config = createConfig({ zoom: false });
+
+      handler.applyZoom(500, 0.5, config);
+
+      expect(markDirty).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handlePinch', () => {
+    it('zooms in when scale > 1 (fingers spread) — X domain narrows', () => {
+      const { handler, scale } = createZoomHandler();
+      scale.setDomainX(0, 1000);
+      scale.setDomainY(0, 100);
+      const config = createConfig();
+      const oldWidth = scale.domainX.max - scale.domainX.min;
+
+      const viewport = scale.viewport;
+      const pinchState: PinchState = { centerX: viewport.x + viewport.width / 2, centerY: viewport.y + viewport.height / 2, scale: 1.5 };
+
+      handler.handlePinch(pinchState, config);
+
+      const newWidth = scale.domainX.max - scale.domainX.min;
+      expect(newWidth).toBeLessThan(oldWidth);
+    });
+
+    it('zooms out when scale < 1 (fingers pinch) — X domain widens', () => {
+      const { handler, scale } = createZoomHandler();
+      scale.setDomainX(0, 1000);
+      scale.setDomainY(0, 100);
+      const config = createConfig();
+      const oldWidth = scale.domainX.max - scale.domainX.min;
+
+      const viewport = scale.viewport;
+      const pinchState: PinchState = { centerX: viewport.x + viewport.width / 2, centerY: viewport.y + viewport.height / 2, scale: 0.5 };
+
+      handler.handlePinch(pinchState, config);
+
+      const newWidth = scale.domainX.max - scale.domainX.min;
+      expect(newWidth).toBeGreaterThan(oldWidth);
+    });
+
+    it('centers on pinch midpoint (centerX in data space)', () => {
+      const { handler, scale } = createZoomHandler();
+      scale.setDomainX(0, 1000);
+      scale.setDomainY(0, 100);
+      const config = createConfig();
+
+      const viewport = scale.viewport;
+      const centerPixel = viewport.x + viewport.width * 0.25;
+      const cursorDataBefore = scale.pixelToX(centerPixel);
+      const pinchState: PinchState = { centerX: centerPixel, centerY: viewport.y + viewport.height / 2, scale: 1.5 };
+
+      handler.handlePinch(pinchState, config);
+
+      const cursorDataAfter = scale.pixelToX(centerPixel);
+      expect(cursorDataAfter).toBeCloseTo(cursorDataBefore, 3);
+    });
+
+    it('does nothing with config.zoom === false', () => {
+      const markDirty = vi.fn();
+      const { handler, scale } = createZoomHandler({ markDirty });
+      scale.setDomainX(0, 1000);
+      scale.setDomainY(0, 100);
+      const config = createConfig({ zoom: false });
+
+      const viewport = scale.viewport;
+      const pinchState: PinchState = { centerX: viewport.x + viewport.width / 2, centerY: viewport.y + viewport.height / 2, scale: 1.5 };
+
+      handler.handlePinch(pinchState, config);
+
+      expect(markDirty).not.toHaveBeenCalled();
+      expect(scale.domainX.min).toBe(0);
+      expect(scale.domainX.max).toBe(1000);
+    });
+
+    it('does nothing when scale === 1', () => {
+      const markDirty = vi.fn();
+      const { handler, scale } = createZoomHandler({ markDirty });
+      scale.setDomainX(0, 1000);
+      scale.setDomainY(0, 100);
+      const config = createConfig();
+
+      const viewport = scale.viewport;
+      const pinchState: PinchState = { centerX: viewport.x + viewport.width / 2, centerY: viewport.y + viewport.height / 2, scale: 1 };
+
+      handler.handlePinch(pinchState, config);
+
+      expect(markDirty).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when scale <= 0 (invalid)', () => {
+      const markDirty = vi.fn();
+      const { handler, scale } = createZoomHandler({ markDirty });
+      scale.setDomainX(0, 1000);
+      scale.setDomainY(0, 100);
+      const config = createConfig();
+
+      const viewport = scale.viewport;
+      handler.handlePinch({ centerX: viewport.x + viewport.width / 2, centerY: viewport.y + viewport.height / 2, scale: 0 }, config);
+      handler.handlePinch({ centerX: viewport.x + viewport.width / 2, centerY: viewport.y + viewport.height / 2, scale: -1 }, config);
+
+      expect(markDirty).not.toHaveBeenCalled();
+    });
+
+    it('sets isZoomed = true', () => {
+      const { handler, scale } = createZoomHandler();
+      scale.setDomainX(0, 1000);
+      scale.setDomainY(0, 100);
+      const config = createConfig();
+
+      expect(handler.isZoomed).toBe(false);
+
+      const viewport = scale.viewport;
+      handler.handlePinch({ centerX: viewport.x + viewport.width / 2, centerY: viewport.y + viewport.height / 2, scale: 1.5 }, config);
+
+      expect(handler.isZoomed).toBe(true);
+    });
+
+    it('Y auto-fits to visible data', () => {
+      const getVisibleValues = vi.fn().mockReturnValue([50, 60, 70]);
+      const { handler, scale } = createZoomHandler({ getVisibleValues });
+      scale.setDomainX(0, 1000);
+      scale.setDomainY(0, 100);
+      const config = createConfig();
+
+      const viewport = scale.viewport;
+      handler.handlePinch({ centerX: viewport.x + viewport.width / 2, centerY: viewport.y + viewport.height / 2, scale: 1.5 }, config);
+
+      expect(getVisibleValues).toHaveBeenCalled();
+      expect(scale.domainY.min).toBeLessThan(50);
+      expect(scale.domainY.max).toBeGreaterThan(70);
     });
   });
 

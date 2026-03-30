@@ -1,5 +1,5 @@
 import { EventDispatcher } from './event-dispatcher';
-import type { PointerState, WheelState } from './types';
+import type { PointerState, WheelState, PinchState } from './types';
 
 function createContainer(): HTMLElement {
   const el = document.createElement('div');
@@ -391,6 +391,275 @@ describe('EventDispatcher', () => {
       dispatchWheel(container, { offsetX: 3, offsetY: 4, deltaY: 10 });
 
       expect(stateRefs[0]).toBe(stateRefs[1]);
+
+      dispatcher.destroy();
+    });
+  });
+
+  describe('pinch events', () => {
+    function mockPointerCapture(el: HTMLElement): void {
+      el.setPointerCapture = vi.fn();
+      el.releasePointerCapture = vi.fn();
+    }
+
+    function dispatchTouch(
+      el: HTMLElement,
+      type: string,
+      pointerId: number,
+      offsetX: number,
+      offsetY: number,
+    ): void {
+      dispatchPointer(el, type, { pointerType: 'touch', pointerId, offsetX, offsetY });
+    }
+
+    it('two touch pointerdown events start pinch tracking', () => {
+      mockPointerCapture(container);
+      const dispatcher = new EventDispatcher(container);
+      const received: PinchState[] = [];
+      dispatcher.subscribePinch((state) => received.push({ ...state }));
+
+      dispatchTouch(container, 'pointerdown', 1, 100, 100);
+      dispatchTouch(container, 'pointerdown', 2, 200, 100);
+
+      // Move to trigger pinch callback
+      dispatchTouch(container, 'pointermove', 2, 250, 100);
+
+      expect(received.length).toBeGreaterThanOrEqual(1);
+      dispatcher.destroy();
+    });
+
+    it('pinch pointermove dispatches PinchState with correct centerX, centerY, and scale', () => {
+      mockPointerCapture(container);
+      const dispatcher = new EventDispatcher(container);
+      const received: PinchState[] = [];
+      dispatcher.subscribePinch((state) => received.push({ ...state }));
+
+      // Two fingers 100px apart
+      dispatchTouch(container, 'pointerdown', 1, 100, 100);
+      dispatchTouch(container, 'pointerdown', 2, 200, 100);
+      // Spread to 150px apart (move finger 2 to 250)
+      dispatchTouch(container, 'pointermove', 2, 250, 100);
+
+      expect(received).toHaveLength(1);
+      expect(received[0]!.centerX).toBe((100 + 250) / 2); // 175
+      expect(received[0]!.centerY).toBe((100 + 100) / 2); // 100
+      // New distance = 150, start distance = 100, scale = 1.5
+      expect(received[0]!.scale).toBe(1.5);
+
+      dispatcher.destroy();
+    });
+
+    it('pinch scale > 1 when fingers spread apart, < 1 when fingers move together', () => {
+      mockPointerCapture(container);
+      const dispatcher = new EventDispatcher(container);
+      const received: PinchState[] = [];
+      dispatcher.subscribePinch((state) => received.push({ ...state }));
+
+      dispatchTouch(container, 'pointerdown', 1, 100, 100);
+      dispatchTouch(container, 'pointerdown', 2, 200, 100);
+
+      // Spread apart
+      dispatchTouch(container, 'pointermove', 2, 300, 100);
+      expect(received[0]!.scale).toBeGreaterThan(1);
+
+      // Move together (relative to previous position — continuous delta)
+      dispatchTouch(container, 'pointermove', 2, 150, 100);
+      expect(received[1]!.scale).toBeLessThan(1);
+
+      dispatcher.destroy();
+    });
+
+    it('pinch deactivates pointer state (active = false) to hide crosshair', () => {
+      mockPointerCapture(container);
+      const dispatcher = new EventDispatcher(container);
+      const pointerStates: PointerState[] = [];
+      dispatcher.subscribe((state) => pointerStates.push({ ...state }));
+
+      dispatchTouch(container, 'pointerdown', 1, 100, 100);
+      dispatchTouch(container, 'pointerdown', 2, 200, 100);
+      dispatchTouch(container, 'pointermove', 2, 250, 100);
+
+      // The last notification should have active = false (crosshair hidden)
+      const last = pointerStates[pointerStates.length - 1]!;
+      expect(last.active).toBe(false);
+
+      dispatcher.destroy();
+    });
+
+    it('pointerup during pinch ends pinch tracking', () => {
+      mockPointerCapture(container);
+      const dispatcher = new EventDispatcher(container);
+      const received: PinchState[] = [];
+      dispatcher.subscribePinch((state) => received.push({ ...state }));
+
+      dispatchTouch(container, 'pointerdown', 1, 100, 100);
+      dispatchTouch(container, 'pointerdown', 2, 200, 100);
+      dispatchTouch(container, 'pointermove', 2, 250, 100);
+      const countAfterPinch = received.length;
+
+      // Lift one finger
+      dispatchTouch(container, 'pointerup', 2, 250, 100);
+
+      // Further moves should not trigger pinch
+      dispatchTouch(container, 'pointermove', 1, 120, 100);
+      expect(received.length).toBe(countAfterPinch);
+
+      dispatcher.destroy();
+    });
+
+    it('pointercancel during pinch ends pinch tracking', () => {
+      mockPointerCapture(container);
+      const dispatcher = new EventDispatcher(container);
+      const received: PinchState[] = [];
+      dispatcher.subscribePinch((state) => received.push({ ...state }));
+
+      dispatchTouch(container, 'pointerdown', 1, 100, 100);
+      dispatchTouch(container, 'pointerdown', 2, 200, 100);
+      dispatchTouch(container, 'pointermove', 2, 250, 100);
+      const countAfterPinch = received.length;
+
+      dispatchTouch(container, 'pointercancel', 2, 250, 100);
+
+      dispatchTouch(container, 'pointermove', 1, 120, 100);
+      expect(received.length).toBe(countAfterPinch);
+
+      dispatcher.destroy();
+    });
+
+    it('mouse events do not trigger pinch (only pointerType === "touch")', () => {
+      mockPointerCapture(container);
+      const dispatcher = new EventDispatcher(container);
+      const received: PinchState[] = [];
+      dispatcher.subscribePinch((state) => received.push({ ...state }));
+
+      dispatchPointer(container, 'pointerdown', { pointerType: 'mouse', pointerId: 1, offsetX: 100, offsetY: 100 });
+      dispatchPointer(container, 'pointerdown', { pointerType: 'mouse', pointerId: 2, offsetX: 200, offsetY: 100 });
+      dispatchPointer(container, 'pointermove', { pointerType: 'mouse', pointerId: 2, offsetX: 250, offsetY: 100 });
+
+      expect(received).toHaveLength(0);
+
+      dispatcher.destroy();
+    });
+
+    it('subscribePinch returns unsubscribe function that removes subscriber', () => {
+      mockPointerCapture(container);
+      const dispatcher = new EventDispatcher(container);
+      const received: PinchState[] = [];
+      const unsub = dispatcher.subscribePinch((state) => received.push({ ...state }));
+
+      dispatchTouch(container, 'pointerdown', 1, 100, 100);
+      dispatchTouch(container, 'pointerdown', 2, 200, 100);
+      dispatchTouch(container, 'pointermove', 2, 250, 100);
+      expect(received).toHaveLength(1);
+
+      unsub();
+
+      dispatchTouch(container, 'pointermove', 2, 300, 100);
+      expect(received).toHaveLength(1);
+
+      dispatcher.destroy();
+    });
+
+    it('multiple pinch subscribers all receive updates', () => {
+      mockPointerCapture(container);
+      const dispatcher = new EventDispatcher(container);
+      const results1: PinchState[] = [];
+      const results2: PinchState[] = [];
+      dispatcher.subscribePinch((state) => results1.push({ ...state }));
+      dispatcher.subscribePinch((state) => results2.push({ ...state }));
+
+      dispatchTouch(container, 'pointerdown', 1, 100, 100);
+      dispatchTouch(container, 'pointerdown', 2, 200, 100);
+      dispatchTouch(container, 'pointermove', 2, 250, 100);
+
+      expect(results1).toHaveLength(1);
+      expect(results2).toHaveLength(1);
+      expect(results1[0]!.scale).toBe(results2[0]!.scale);
+
+      dispatcher.destroy();
+    });
+
+    it('destroy clears pinch tracking state and subscribers', () => {
+      mockPointerCapture(container);
+      const dispatcher = new EventDispatcher(container);
+      const received: PinchState[] = [];
+      dispatcher.subscribePinch((state) => received.push({ ...state }));
+
+      dispatchTouch(container, 'pointerdown', 1, 100, 100);
+      dispatchTouch(container, 'pointerdown', 2, 200, 100);
+
+      dispatcher.destroy();
+
+      // After destroy, no pinch events should fire
+      dispatchTouch(container, 'pointermove', 2, 250, 100);
+      expect(received).toHaveLength(0);
+    });
+
+    it('touch-action: none is set on container when disableTouchAction option is true and restored in destroy', () => {
+      container.style.touchAction = 'auto';
+      const dispatcher = new EventDispatcher(container, { disableTouchAction: true });
+
+      expect(container.style.touchAction).toBe('none');
+
+      dispatcher.destroy();
+
+      expect(container.style.touchAction).toBe('auto');
+    });
+
+    it('touch-action is not modified when disableTouchAction option is not set', () => {
+      container.style.touchAction = 'auto';
+      const dispatcher = new EventDispatcher(container);
+
+      expect(container.style.touchAction).toBe('auto');
+
+      dispatcher.destroy();
+
+      expect(container.style.touchAction).toBe('auto');
+    });
+
+    it('setPointerCapture is called on touch pointerdown', () => {
+      mockPointerCapture(container);
+      const dispatcher = new EventDispatcher(container);
+
+      dispatchTouch(container, 'pointerdown', 42, 100, 100);
+
+      expect(container.setPointerCapture).toHaveBeenCalledWith(42);
+
+      dispatcher.destroy();
+    });
+
+    it('single touch pointer does not trigger pinch (need exactly 2)', () => {
+      mockPointerCapture(container);
+      const dispatcher = new EventDispatcher(container);
+      const received: PinchState[] = [];
+      dispatcher.subscribePinch((state) => received.push({ ...state }));
+
+      dispatchTouch(container, 'pointerdown', 1, 100, 100);
+      dispatchTouch(container, 'pointermove', 1, 150, 100);
+
+      expect(received).toHaveLength(0);
+
+      dispatcher.destroy();
+    });
+
+    it('third touch pointer is ignored (pinch only tracks first 2)', () => {
+      mockPointerCapture(container);
+      const dispatcher = new EventDispatcher(container);
+      const received: PinchState[] = [];
+      dispatcher.subscribePinch((state) => received.push({ ...state }));
+
+      dispatchTouch(container, 'pointerdown', 1, 100, 100);
+      dispatchTouch(container, 'pointerdown', 2, 200, 100);
+      dispatchTouch(container, 'pointerdown', 3, 300, 100);
+
+      // Only 2 pointers tracked — third ignored
+      dispatchTouch(container, 'pointermove', 3, 350, 100);
+      // Pointer 3 is not in the map, so no pinch event
+      expect(received).toHaveLength(0);
+
+      // Existing 2 should still work
+      dispatchTouch(container, 'pointermove', 2, 250, 100);
+      expect(received).toHaveLength(1);
 
       dispatcher.destroy();
     });

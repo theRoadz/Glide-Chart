@@ -198,7 +198,9 @@ export class GlideChart {
     };
     this.crosshair = new Crosshair(this.scale, this.crosshairDataSource);
     this.tooltip = new Tooltip(container, this.scale, this.crosshairDataSource, this.resolvedConfig);
-    this.eventDispatcher = new EventDispatcher(container);
+    this.eventDispatcher = new EventDispatcher(container, {
+      disableTouchAction: this.resolvedConfig.zoom !== false,
+    });
     this.eventDispatcher.subscribe((state) => {
       this.pointerState.x = state.x;
       this.pointerState.y = state.y;
@@ -217,6 +219,10 @@ export class GlideChart {
     );
     this.eventDispatcher.subscribeWheel((wheelState) => {
       this.zoomHandler.handleWheel(wheelState, this.resolvedConfig);
+      this.tooltip.update(this.pointerState, this.resolvedConfig);
+    });
+    this.eventDispatcher.subscribePinch((pinchState) => {
+      this.zoomHandler.handlePinch(pinchState, this.resolvedConfig);
       this.tooltip.update(this.pointerState, this.resolvedConfig);
     });
 
