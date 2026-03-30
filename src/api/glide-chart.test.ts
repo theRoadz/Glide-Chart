@@ -1276,4 +1276,544 @@ describe('GlideChart', () => {
       chart.destroy();
     });
   });
+
+  // ===== Story 4.6: Dataset Replace, Clear & Destroy API — Edge Case Hardening =====
+
+  describe('setData edge cases (Story 4.6)', () => {
+    it('setData with empty array clears the series', () => {
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price', data: makePoints(10) }],
+      });
+
+      // Replace with empty array — should not throw
+      chart.setData('price', []);
+      tickFrame();
+
+      // Buffer should be empty — adding new data should still work
+      chart.addData('price', { timestamp: 5000, value: 42 });
+      tickFrame();
+      chart.destroy();
+    });
+
+    it('setData with single point — graceful degradation, no crash', () => {
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price', data: makePoints(10) }],
+      });
+
+      chart.setData('price', [{ timestamp: 1000, value: 50 }]);
+      tickFrame();
+
+      // Chart should render without error (single point = no spline segments)
+      chart.destroy();
+    });
+
+    it('setData with 2 points produces valid render', () => {
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price' }],
+      });
+
+      chart.setData('price', [
+        { timestamp: 1000, value: 10 },
+        { timestamp: 2000, value: 20 },
+      ]);
+      tickFrame();
+
+      // 2 points = 1 linear segment — should render without error
+      chart.destroy();
+    });
+
+    it('setData with 10,000 points completes under reasonable time', () => {
+      const chart = new GlideChart(container, {
+        animation: { enabled: false },
+        maxDataPoints: 15000,
+        series: [{ id: 'price' }],
+      });
+
+      const largeDataset = makePoints(10000);
+      const start = performance.now();
+      chart.setData('price', largeDataset);
+      const elapsed = performance.now() - start;
+
+      // 1000ms generous threshold to avoid flaky failures on slow CI
+      expect(elapsed).toBeLessThan(1000);
+      tickFrame();
+      chart.destroy();
+    });
+
+    it('setData with invalid seriesId throws', () => {
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price' }],
+      });
+      expect(() => chart.setData('nonexistent', [{ timestamp: 1, value: 1 }])).toThrow(
+        "GlideChart: series 'nonexistent' not found",
+      );
+      chart.destroy();
+    });
+
+    it('setData on one series in multi-series leaves others untouched', () => {
+      const chart = new GlideChart(container, {
+        series: [
+          { id: 'price', data: makePoints(5) },
+          { id: 'volume', data: makePoints(3, 2000) },
+        ],
+      });
+
+      // Replace price data entirely
+      chart.setData('price', makePoints(20, 8000));
+
+      // Volume is still intact — can addData
+      chart.addData('volume', { timestamp: 9000, value: 42 });
+      tickFrame();
+      chart.destroy();
+    });
+
+    it('setData with points exceeding maxDataPoints retains newest points', () => {
+      const chart = new GlideChart(container, {
+        maxDataPoints: 10,
+        series: [{ id: 'price' }],
+      });
+
+      const points = makePoints(20);
+      chart.setData('price', points);
+      tickFrame();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const state = (chart as any).seriesMap.get('price');
+      // Ring buffer should contain at most maxDataPoints entries
+      expect(state.buffer.count).toBe(10);
+      chart.destroy();
+    });
+
+    it('setData with unsorted timestamps does not crash', () => {
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price' }],
+      });
+
+      // Unsorted timestamps — behavior is undefined but should not crash
+      const unsorted: DataPoint[] = [
+        { timestamp: 3000, value: 30 },
+        { timestamp: 1000, value: 10 },
+        { timestamp: 5000, value: 50 },
+        { timestamp: 2000, value: 20 },
+      ];
+      chart.setData('price', unsorted);
+      tickFrame();
+
+      // No crash — undefined spline behavior but chart is stable
+      chart.destroy();
+    });
+
+    it('setData after zoom resets zoom state', () => {
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price', data: makePoints(20) }],
+      });
+      tickFrame();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const zoomHandler = (chart as any).zoomHandler;
+      const resetZoomSpy = vi.spyOn(zoomHandler, 'resetZoom');
+
+      chart.setData('price', makePoints(10, 5000));
+
+      expect(resetZoomSpy).toHaveBeenCalled();
+      resetZoomSpy.mockRestore();
+      chart.destroy();
+    });
+
+    it('setData records stale data arrival when staleDetector is active', () => {
+      vi.useFakeTimers();
+      try {
+        const onStaleChange = vi.fn();
+        const chart = new GlideChart(container, {
+          series: [{ id: 'price', data: makePoints(5) }],
+          staleThreshold: 5000,
+          onStaleChange,
+        });
+        tickFrame();
+
+        // Go stale
+        vi.advanceTimersByTime(6000);
+        expect(onStaleChange).toHaveBeenCalledWith(
+          expect.objectContaining({ seriesId: 'price', isStale: true }),
+        );
+
+        // setData should record data arrival and clear stale
+        onStaleChange.mockClear();
+        chart.setData('price', makePoints(3, 9000));
+
+        expect(onStaleChange).toHaveBeenCalledWith(
+          expect.objectContaining({ seriesId: 'price', isStale: false }),
+        );
+
+        chart.destroy();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe('clearData edge cases (Story 4.6)', () => {
+    it('clearData(seriesId) then immediately addData works', () => {
+      const chart = new GlideChart(container, {
+        series: [
+          { id: 'price', data: makePoints(5) },
+          { id: 'volume', data: makePoints(3) },
+        ],
+      });
+      chart.clearData('price');
+      chart.addData('price', { timestamp: 9999, value: 100 });
+      tickFrame();
+      chart.destroy();
+    });
+
+    it('clearData() (all) then addData on each series works', () => {
+      const chart = new GlideChart(container, {
+        series: [
+          { id: 'price', data: makePoints(5) },
+          { id: 'volume', data: makePoints(3) },
+        ],
+      });
+      chart.clearData();
+      chart.addData('price', { timestamp: 1000, value: 50 });
+      chart.addData('volume', { timestamp: 1000, value: 100 });
+      tickFrame();
+      chart.destroy();
+    });
+
+    it('clearData on already-empty series is a no-op, no crash', () => {
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price' }],
+      });
+
+      // Series has no data — clearData should be idempotent
+      chart.clearData('price');
+      chart.clearData('price');
+      tickFrame();
+
+      // Can still add data after multiple clears
+      chart.addData('price', { timestamp: 1000, value: 50 });
+      tickFrame();
+      chart.destroy();
+    });
+
+    it('clearData with invalid seriesId throws', () => {
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price' }],
+      });
+      expect(() => chart.clearData('nonexistent')).toThrow(
+        "GlideChart: series 'nonexistent' not found",
+      );
+      chart.destroy();
+    });
+
+    it('clearData while animation is in-progress cancels animation', () => {
+      const chart = new GlideChart(container, {
+        animation: { enabled: true, duration: 300 },
+        series: [{ id: 'price', data: makePoints(10) }],
+      });
+      tickFrame();
+
+      // Trigger animation
+      chart.addData('price', { timestamp: 99999, value: 50 });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dataLayerRenderer = (chart as any).dataLayerRenderer;
+      const cancelSpy = vi.spyOn(dataLayerRenderer, 'cancelAnimation');
+
+      chart.clearData('price');
+
+      expect(cancelSpy).toHaveBeenCalled();
+      cancelSpy.mockRestore();
+      chart.destroy();
+    });
+
+    it('clearData resets keyboard navigator via deactivate()', () => {
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price', data: makePoints(10) }],
+      });
+      tickFrame();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const keyboardNav = (chart as any).keyboardNavigator;
+      const deactivateSpy = vi.spyOn(keyboardNav, 'deactivate');
+
+      chart.clearData('price');
+
+      expect(deactivateSpy).toHaveBeenCalled();
+      deactivateSpy.mockRestore();
+      chart.destroy();
+    });
+
+    it('clearData(seriesId) on multi-series only clears specified series', () => {
+      const chart = new GlideChart(container, {
+        series: [
+          { id: 'price', data: makePoints(5) },
+          { id: 'volume', data: makePoints(3) },
+        ],
+      });
+
+      chart.clearData('price');
+
+      // Volume should still be functional
+      chart.addData('volume', { timestamp: 9999, value: 100 });
+      tickFrame();
+      chart.destroy();
+    });
+  });
+
+  describe('destroy completeness (Story 4.6)', () => {
+    it('after destroy, container has no child canvas elements', () => {
+      const chart = new GlideChart(container);
+      const canvasesBefore = container.querySelectorAll('canvas');
+      expect(canvasesBefore.length).toBe(4);
+
+      chart.destroy();
+
+      const canvasesAfter = container.querySelectorAll('canvas');
+      expect(canvasesAfter.length).toBe(0);
+    });
+
+    it('after destroy, all public methods throw', () => {
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price' }],
+      });
+      chart.destroy();
+
+      expect(() => chart.addData('price', { timestamp: 1, value: 1 })).toThrow(
+        'GlideChart: instance has been destroyed',
+      );
+      expect(() => chart.setData('price', [])).toThrow(
+        'GlideChart: instance has been destroyed',
+      );
+      expect(() => chart.clearData()).toThrow(
+        'GlideChart: instance has been destroyed',
+      );
+      expect(() => chart.setConfig({})).toThrow(
+        'GlideChart: instance has been destroyed',
+      );
+      expect(() => chart.resize()).toThrow(
+        'GlideChart: instance has been destroyed',
+      );
+      expect(() => chart.destroy()).toThrow(
+        'GlideChart: instance has been destroyed',
+      );
+    });
+
+    it('destroy called twice throws on second call', () => {
+      const chart = new GlideChart(container);
+      chart.destroy();
+      expect(() => chart.destroy()).toThrow('GlideChart: instance has been destroyed');
+    });
+
+    it('after destroy, no rAF callbacks fire', () => {
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price', data: makePoints(10) }],
+      });
+      tickFrame();
+
+      chart.destroy();
+
+      // Reset rafCallback tracking
+      rafCallback = null;
+      tickFrame();
+
+      // No new rAF should have been scheduled
+      expect(rafCallback).toBeNull();
+    });
+
+    it('after destroy, ResizeObserver is disconnected', () => {
+      mockDisconnect.mockClear();
+      const chart = new GlideChart(container);
+      chart.destroy();
+      expect(mockDisconnect).toHaveBeenCalled();
+    });
+
+    it('after destroy, no DOM event listeners remain on container', () => {
+      const addListenerSpy = vi.spyOn(container, 'addEventListener');
+      const removeListenerSpy = vi.spyOn(container, 'removeEventListener');
+
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price', data: makePoints(5) }],
+      });
+
+      const addCount = addListenerSpy.mock.calls.length;
+
+      chart.destroy();
+
+      // Every addEventListener call should have a matching removeEventListener
+      expect(removeListenerSpy.mock.calls.length).toBeGreaterThanOrEqual(addCount);
+
+      addListenerSpy.mockRestore();
+      removeListenerSpy.mockRestore();
+    });
+
+    it('after destroy, staleDetector timers are cleared', () => {
+      vi.useFakeTimers();
+      try {
+        const onStaleChange = vi.fn();
+        const chart = new GlideChart(container, {
+          series: [{ id: 'price', data: makePoints(5) }],
+          staleThreshold: 5000,
+          onStaleChange,
+        });
+        tickFrame();
+
+        chart.destroy();
+
+        // Advance time — no stale callbacks should fire
+        vi.advanceTimersByTime(10000);
+        expect(onStaleChange).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('after destroy, all references nulled for GC', () => {
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price', data: makePoints(5) }],
+      });
+      tickFrame();
+
+      chart.destroy();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const c = chart as any;
+      expect(c.seriesMap.size).toBe(0);
+      expect(c.scale).toBeNull();
+      expect(c.layerManager).toBeNull();
+      expect(c.frameScheduler).toBeNull();
+      expect(c.eventDispatcher).toBeNull();
+      expect(c.resolvedConfig).toBeNull();
+      expect(c.tooltip).toBeNull();
+      expect(c.crosshair).toBeNull();
+    });
+  });
+
+  describe('lifecycle integration sequences (Story 4.6)', () => {
+    it('create → addData → setData → clearData → addData → destroy', () => {
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price' }],
+      });
+
+      chart.addData('price', makePoints(5));
+      tickFrame();
+
+      chart.setData('price', makePoints(10, 5000));
+      tickFrame();
+
+      chart.clearData('price');
+      tickFrame();
+
+      chart.addData('price', { timestamp: 20000, value: 75 });
+      tickFrame();
+
+      chart.destroy();
+    });
+
+    it('create → setData → setData (replace twice) → destroy', () => {
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price' }],
+      });
+
+      chart.setData('price', makePoints(5));
+      tickFrame();
+
+      chart.setData('price', makePoints(20, 10000));
+      tickFrame();
+
+      chart.destroy();
+    });
+
+    it('create → addData(many) → clearData() → setData(new) → destroy', () => {
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price' }],
+      });
+
+      chart.addData('price', makePoints(100));
+      tickFrame();
+
+      chart.clearData();
+      tickFrame();
+
+      chart.setData('price', makePoints(50, 50000));
+      tickFrame();
+
+      chart.destroy();
+    });
+
+    it('create → destroy immediately (no data ever added)', () => {
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price' }],
+      });
+      chart.destroy();
+    });
+
+    it('multi-series create → setData on each → clearData(one) → destroy', () => {
+      const chart = new GlideChart(container, {
+        series: [
+          { id: 'price' },
+          { id: 'volume' },
+          { id: 'ref' },
+        ],
+      });
+
+      chart.setData('price', makePoints(10));
+      chart.setData('volume', makePoints(8, 2000));
+      chart.setData('ref', makePoints(5, 3000));
+      tickFrame();
+
+      chart.clearData('volume');
+      tickFrame();
+
+      // Other series still functional
+      chart.addData('price', { timestamp: 99999, value: 42 });
+      chart.addData('ref', { timestamp: 99999, value: 55 });
+      tickFrame();
+
+      chart.destroy();
+    });
+  });
+
+  describe('setData/clearData animation state (Story 4.6)', () => {
+    it('setData properly handles animation snapshot and cancellation on scale change', () => {
+      const chart = new GlideChart(container, {
+        animation: { enabled: true, duration: 300 },
+        series: [{ id: 'price', data: makePoints(10) }],
+      });
+      tickFrame();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dataLayerRenderer = (chart as any).dataLayerRenderer;
+      const snapshotSpy = vi.spyOn(dataLayerRenderer, 'snapshotCurveState');
+
+      // setData triggers snapshot then potentially cancels if scale changes
+      chart.setData('price', makePoints(20, 50000));
+
+      expect(snapshotSpy).toHaveBeenCalled();
+      snapshotSpy.mockRestore();
+      chart.destroy();
+    });
+
+    it('clearData cancels animation before clearing state', () => {
+      const chart = new GlideChart(container, {
+        animation: { enabled: true, duration: 300 },
+        series: [{ id: 'price', data: makePoints(10) }],
+      });
+      tickFrame();
+
+      // Start an animation
+      chart.addData('price', { timestamp: 99999, value: 50 });
+      tickFrame();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dataLayerRenderer = (chart as any).dataLayerRenderer;
+      const cancelSpy = vi.spyOn(dataLayerRenderer, 'cancelAnimation');
+
+      chart.clearData();
+
+      expect(cancelSpy).toHaveBeenCalled();
+      cancelSpy.mockRestore();
+      chart.destroy();
+    });
+  });
 });

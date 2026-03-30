@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-27
-last_updated: 2026-03-30  # Story 4.5 done
+last_updated: 2026-03-30  # Story 4.6 done
 project: chartview
 project_key: NOKEY
 tracking_system: file-system
@@ -78,7 +78,7 @@ development_status:
   4-3-scroll-wheel-zoom: done
   4-4-pinch-to-zoom-on-touch-devices: done
   4-5-keyboard-navigation-and-accessibility: done
-  4-6-dataset-replace-clear-and-destroy-api: backlog
+  4-6-dataset-replace-clear-and-destroy-api: done
   epic-4-retrospective: optional
 
   # Epic 5: Theming & Customization (4 stories)

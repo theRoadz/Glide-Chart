@@ -73,3 +73,8 @@
 ## ~~Deferred from: code review of 4-4-pinch-to-zoom-on-touch-devices (2026-03-30)~~
 
 - ~~**`touch-action: none` set unconditionally, breaks scroll on zoom-disabled charts**~~ — Fixed: added `disableTouchAction` option to `EventDispatcher` constructor, only applied when `zoom !== false` in GlideChart.
+
+## Deferred from: code review of 4-6-dataset-replace-clear-and-destroy-api (2026-03-30)
+
+- **`setData` with duplicate timestamps causes division by zero in `SplineCache.computeTangents`** — `h[k] = points[k+1].timestamp - points[k].timestamp` produces 0 when consecutive timestamps match; `delta[k]` becomes `Infinity`/`NaN`. The `recomputeTail` path has a `hi === 0` guard but `computeFull` (used by `setData`) does not. Pre-existing in spline math.
+- **`setData` partial failure leaves buffer in inconsistent state** — Buffer is cleared first (`state.buffer.clear()`), then points are pushed one-by-one with validation. If a mid-array point fails validation, the buffer is left with partial data and spline cache is never recomputed. The operation is non-atomic. Pre-existing design in `glide-chart.ts`.
