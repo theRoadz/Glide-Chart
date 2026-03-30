@@ -81,6 +81,7 @@ export class BackgroundLayerRenderer {
     this.ctx.globalAlpha = this.config.grid.opacity;
     this.ctx.strokeStyle = this.config.grid.color;
     this.ctx.lineWidth = this.config.grid.lineWidth;
+    this.ctx.setLineDash(this.config.grid.dashPattern);
 
     this.ctx.beginPath();
 
@@ -99,6 +100,7 @@ export class BackgroundLayerRenderer {
     }
 
     this.ctx.stroke();
+    this.ctx.setLineDash([]);
     this.ctx.globalAlpha = 1.0;
   }
 }

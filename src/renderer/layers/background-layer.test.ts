@@ -15,7 +15,7 @@ function makeScale(width = 800, height = 600): Scale {
   return scale;
 }
 
-function makeConfig(overrides?: Partial<{ visible: boolean; color: string; opacity: number; lineWidth: number; backgroundColor: string }>): Readonly<ResolvedConfig> {
+function makeConfig(overrides?: Partial<{ visible: boolean; color: string; opacity: number; lineWidth: number; dashPattern: number[]; backgroundColor: string }>): Readonly<ResolvedConfig> {
   return resolveConfig({
     backgroundColor: overrides?.backgroundColor,
     grid: {
@@ -23,6 +23,7 @@ function makeConfig(overrides?: Partial<{ visible: boolean; color: string; opaci
       color: overrides?.color ?? '#ffffff',
       opacity: overrides?.opacity ?? 0.1,
       lineWidth: overrides?.lineWidth ?? 1,
+      dashPattern: overrides?.dashPattern ?? [],
     },
   });
 }
@@ -41,6 +42,7 @@ function createRenderer(opts?: {
   color?: string;
   opacity?: number;
   lineWidth?: number;
+  dashPattern?: number[];
   backgroundColor?: string;
 }) {
   const width = opts?.width ?? 800;
@@ -53,6 +55,7 @@ function createRenderer(opts?: {
     color: opts?.color,
     opacity: opts?.opacity,
     lineWidth: opts?.lineWidth,
+    dashPattern: opts?.dashPattern,
     backgroundColor: opts?.backgroundColor,
   });
   const renderer = new BackgroundLayerRenderer(ctx, canvas, scale, config);
@@ -141,6 +144,16 @@ describe('BackgroundLayerRenderer', () => {
       expect(beginPathSpy).not.toHaveBeenCalled();
     });
 
+    it('grid.visible === false with non-empty dashPattern still skips grid (no setLineDash called)', () => {
+      const { renderer, ctx } = createRenderer({ visible: false, dashPattern: [4, 4] });
+      const setLineDashSpy = vi.spyOn(ctx, 'setLineDash');
+      const beginPathSpy = vi.spyOn(ctx, 'beginPath');
+      renderer.draw();
+
+      expect(setLineDashSpy).not.toHaveBeenCalled();
+      expect(beginPathSpy).not.toHaveBeenCalled();
+    });
+
     it('fills background color before drawing grid lines', () => {
       const { renderer, ctx } = createRenderer();
       const fillRectSpy = vi.spyOn(ctx, 'fillRect');
@@ -205,6 +218,48 @@ describe('BackgroundLayerRenderer', () => {
       scale.setDomainX(5, 5);
       scale.setDomainY(5, 5);
       expect(() => renderer.draw()).not.toThrow();
+    });
+
+    it('grid with dashPattern [4, 4] calls setLineDash([4, 4]) before stroke', () => {
+      const { renderer, ctx } = createRenderer({ dashPattern: [4, 4] });
+      const setLineDashSpy = vi.spyOn(ctx, 'setLineDash');
+      const strokeSpy = vi.spyOn(ctx, 'stroke');
+      renderer.draw();
+
+      expect(setLineDashSpy).toHaveBeenCalledWith([4, 4]);
+      expect(setLineDashSpy.mock.invocationCallOrder[0]).toBeLessThan(
+        strokeSpy.mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it('grid with default config (no dashPattern override) calls setLineDash([]) (solid)', () => {
+      const { renderer, ctx } = createRenderer();
+      const setLineDashSpy = vi.spyOn(ctx, 'setLineDash');
+      renderer.draw();
+
+      // First call sets the dash pattern from config ([] for solid)
+      expect(setLineDashSpy.mock.calls[0]).toEqual([[]]);
+    });
+
+    it('grid with dashPattern [2, 4, 6] (complex pattern) calls setLineDash([2, 4, 6])', () => {
+      const { renderer, ctx } = createRenderer({ dashPattern: [2, 4, 6] });
+      const setLineDashSpy = vi.spyOn(ctx, 'setLineDash');
+      renderer.draw();
+
+      expect(setLineDashSpy).toHaveBeenCalledWith([2, 4, 6]);
+    });
+
+    it('setLineDash([]) is called after stroke() to reset dash state', () => {
+      const { renderer, ctx } = createRenderer({ dashPattern: [4, 4] });
+      const setLineDashSpy = vi.spyOn(ctx, 'setLineDash');
+      const strokeSpy = vi.spyOn(ctx, 'stroke');
+      renderer.draw();
+
+      // Second setLineDash call should be the reset ([]) and come after stroke
+      expect(setLineDashSpy.mock.calls[1]).toEqual([[]]);
+      expect(strokeSpy.mock.invocationCallOrder[0]).toBeLessThan(
+        setLineDashSpy.mock.invocationCallOrder[1]!,
+      );
     });
   });
 });

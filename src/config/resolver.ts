@@ -1,8 +1,10 @@
 import { ThemeMode } from './types';
 import type {
   ChartConfig,
+  GridConfig,
   GradientConfig,
   LineConfig,
+  AnimationConfig,
   ResolvedConfig,
   ResolvedSeriesConfig,
 } from './types';
@@ -81,6 +83,30 @@ function validateLineAndGradient(
   }
 }
 
+function validateGridConfig(grid: Readonly<GridConfig>): void {
+  if (!(grid.opacity >= 0 && grid.opacity <= 1)) {
+    throw new Error('ConfigResolver: grid.opacity must be between 0 and 1');
+  }
+
+  if (!(grid.lineWidth > 0) || !Number.isFinite(grid.lineWidth)) {
+    throw new Error('ConfigResolver: grid.lineWidth must be positive');
+  }
+
+  if (!grid.dashPattern.every(v => Number.isFinite(v) && v >= 0)) {
+    throw new Error(
+      'ConfigResolver: grid.dashPattern values must be non-negative finite numbers'
+    );
+  }
+}
+
+function validateAnimationConfig(animation: Readonly<AnimationConfig>): void {
+  if (!Number.isFinite(animation.duration) || animation.duration < 0) {
+    throw new Error(
+      'ConfigResolver: animation.duration must be non-negative and finite'
+    );
+  }
+}
+
 function validateConfig(config: ResolvedConfig): void {
   if (
     !Number.isInteger(config.maxDataPoints) ||
@@ -94,6 +120,8 @@ function validateConfig(config: ResolvedConfig): void {
   }
 
   validateLineAndGradient(config.line, config.gradient, '');
+  validateGridConfig(config.grid);
+  validateAnimationConfig(config.animation);
 
   for (const series of config.series) {
     validateLineAndGradient(

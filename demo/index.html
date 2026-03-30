@@ -168,7 +168,7 @@
 <body>
   <div class="header">
     <h1>GlideChart</h1>
-    <span class="subtitle">Developer Demo — Real-Time Streaming, Multi-Series, Crosshair, Tooltip, Scroll & Pinch Zoom, Keyboard Navigation, Dataset Lifecycle, Theme Switching, Per-Series Customization</span>
+    <span class="subtitle">Developer Demo — Real-Time Streaming, Multi-Series, Crosshair, Tooltip, Scroll & Pinch Zoom, Keyboard Navigation, Dataset Lifecycle, Theme Switching, Per-Series Customization, Grid, Gradient & Animation Customization</span>
   </div>
 
   <div class="controls">
@@ -179,6 +179,8 @@
     <button id="btn-random">New Random Data</button>
     <div class="divider"></div>
     <button id="btn-destroy">Destroy</button>
+    <div class="divider"></div>
+    <button id="btn-dash-grid">Dashed Grid</button>
   </div>
 
   <div class="status">
@@ -451,8 +453,30 @@
         createMultiChart();
         btnDestroy.textContent = 'Destroy';
         setButtonsEnabled(true);
+        // Re-apply dashed grid state to recreated charts
+        if (dashedGrid) {
+          const dashPattern = [6, 3];
+          chart.setConfig({ grid: { dashPattern } });
+          if (multiChart) multiChart.setConfig({ grid: { dashPattern } });
+        }
         updateStatus();
       }
+    });
+
+    // --- Dashed grid toggle ---
+
+    const btnDashGrid = document.getElementById('btn-dash-grid');
+    let dashedGrid = false;
+
+    btnDashGrid.addEventListener('click', () => {
+      dashedGrid = !dashedGrid;
+      const dashPattern = dashedGrid ? [6, 3] : [];
+      btnDashGrid.classList.toggle('active', dashedGrid);
+      btnDashGrid.textContent = dashedGrid ? 'Solid Grid' : 'Dashed Grid';
+
+      if (chart) chart.setConfig({ grid: { dashPattern } });
+      if (multiChart) multiChart.setConfig({ grid: { dashPattern } });
+      if (streamChart) streamChart.setConfig({ grid: { dashPattern } });
     });
 
     // --- Multi-series chart (price + reference line) ---
@@ -646,6 +670,10 @@
         createStreamChart();
         btnStreamStart.disabled = false;
         btnStreamStop.disabled = true;
+        // Re-apply dashed grid state to recreated stream chart
+        if (dashedGrid) {
+          streamChart.setConfig({ grid: { dashPattern: [6, 3] } });
+        }
       }
     });
 

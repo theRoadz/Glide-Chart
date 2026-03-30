@@ -2081,4 +2081,73 @@ describe('GlideChart', () => {
       chart.destroy();
     });
   });
+
+  describe('grid visibility toggle via setConfig', () => {
+    it('grid: { visible: false } hides grid, visible: true restores it', () => {
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price', data: makePoints(5) }],
+      });
+      tickFrame();
+
+      // Hide grid
+      chart.setConfig({ grid: { visible: false } });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let resolved = (chart as any).resolvedConfig;
+      expect(resolved.grid.visible).toBe(false);
+      tickFrame();
+
+      // Show grid again
+      chart.setConfig({ grid: { visible: true } });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      resolved = (chart as any).resolvedConfig;
+      expect(resolved.grid.visible).toBe(true);
+      tickFrame();
+
+      chart.destroy();
+    });
+  });
+
+  describe('gradient per-series customization via setConfig', () => {
+    it('setConfig with per-series gradient overrides reflects in resolved config', () => {
+      const chart = new GlideChart(container, {
+        series: [
+          { id: 'price', data: makePoints(5) },
+          { id: 'ref', data: makePoints(3, 2000) },
+        ],
+      });
+      tickFrame();
+
+      chart.setConfig({
+        series: [
+          { id: 'price', gradient: { topColor: '#ff0000', topOpacity: 0.5 } },
+          { id: 'ref', gradient: { bottomColor: '#00ff00' } },
+        ],
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const resolved = (chart as any).resolvedConfig;
+      expect(resolved.series[0].gradient.topColor).toBe('#ff0000');
+      expect(resolved.series[0].gradient.topOpacity).toBe(0.5);
+      expect(resolved.series[1].gradient.bottomColor).toBe('#00ff00');
+      tickFrame();
+      chart.destroy();
+    });
+  });
+
+  describe('animation speed customization via setConfig', () => {
+    it('setConfig with animation.duration: 0 resolves to instant mode', () => {
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price', data: makePoints(5) }],
+      });
+      tickFrame();
+
+      chart.setConfig({ animation: { duration: 0 } });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const resolved = (chart as any).resolvedConfig;
+      expect(resolved.animation.duration).toBe(0);
+      tickFrame();
+      chart.destroy();
+    });
+  });
 });

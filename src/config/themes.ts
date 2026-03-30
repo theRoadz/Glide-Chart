@@ -23,6 +23,7 @@ export const DARK_THEME: Partial<ChartConfig> = {
     color: '#ffffff',
     opacity: 0.35,
     lineWidth: 1,
+    dashPattern: [],
   },
   animation: {
     enabled: true,
@@ -85,6 +86,7 @@ export const LIGHT_THEME: Partial<ChartConfig> = {
     color: '#000000',
     opacity: 0.5,
     lineWidth: 1,
+    dashPattern: [],
   },
   animation: {
     enabled: true,

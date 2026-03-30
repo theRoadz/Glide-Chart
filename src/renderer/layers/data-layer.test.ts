@@ -244,6 +244,34 @@ describe('DataLayerRenderer', () => {
     });
   });
 
+  describe('draw() — gradient per-series opacity', () => {
+    it('series with custom gradient topOpacity: 0.8 and bottomOpacity: 0.2 renders correct color stops', () => {
+      const { canvas, ctx } = createCanvas();
+      const scale = makeScale();
+      scale.setDomainX(0, 10);
+      scale.setDomainY(0, 100);
+
+      const config = makeSeriesConfig({
+        gradientEnabled: true,
+        gradientTopColor: '#ff0000',
+        gradientBottomColor: '#00ff00',
+        gradientTopOpacity: 0.8,
+        gradientBottomOpacity: 0.2,
+      });
+      const series = makeSeries([[0, 10], [10, 90]], config);
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series], ANIM_OFF);
+
+      renderer.draw();
+
+      expect(ctx.createLinearGradient).toHaveBeenCalled();
+      expect(ctx.fill).toHaveBeenCalled();
+
+      // Verify the pre-computed rgba values via hexToRgba
+      expect(hexToRgba('#ff0000', 0.8)).toBe('rgba(255, 0, 0, 0.8)');
+      expect(hexToRgba('#00ff00', 0.2)).toBe('rgba(0, 255, 0, 0.2)');
+    });
+  });
+
   describe('draw() — multiple series', () => {
     it('multiple series each render with their own config colors', () => {
       const { canvas, ctx } = createCanvas();
@@ -494,6 +522,92 @@ describe('DataLayerRenderer', () => {
 
       expect(ctx.createLinearGradient).toHaveBeenCalled();
       expect(ctx.fill).toHaveBeenCalled();
+    });
+  });
+
+  describe('animation — duration: 0 (instant mode)', () => {
+    it('duration: 0 means snapshotCurveState returns early, isAnimating stays false', () => {
+      const { canvas, ctx } = createCanvas();
+      const scale = makeScale();
+      scale.setDomainX(0, 10);
+      scale.setDomainY(0, 100);
+
+      const ANIM_INSTANT: Readonly<AnimationConfig> = { enabled: true, duration: 0 };
+
+      const buffer = new RingBuffer<DataPoint>(10000);
+      buffer.push({ timestamp: 0, value: 10 });
+      buffer.push({ timestamp: 10, value: 90 });
+      const splineCache = new SplineCache(buffer);
+      splineCache.computeFull();
+
+      const series: SeriesRenderData = { buffer, splineCache, config: makeSeriesConfig() };
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series], ANIM_INSTANT);
+
+      renderer.snapshotCurveState();
+
+      expect(renderer.isAnimating).toBe(false);
+      expect(renderer.needsNextFrame).toBe(false);
+    });
+  });
+
+  describe('animation — duration: 1000 (slower animation)', () => {
+    it('at half duration, isAnimating is true and animation is in progress', () => {
+      const { canvas, ctx } = createCanvas();
+      const scale = makeScale();
+      scale.setDomainX(0, 10);
+      scale.setDomainY(0, 100);
+
+      const ANIM_SLOW: Readonly<AnimationConfig> = { enabled: true, duration: 1000 };
+
+      const buffer = new RingBuffer<DataPoint>(10000);
+      buffer.push({ timestamp: 0, value: 10 });
+      buffer.push({ timestamp: 10, value: 90 });
+      const splineCache = new SplineCache(buffer);
+      splineCache.computeFull();
+
+      const series: SeriesRenderData = { buffer, splineCache, config: makeSeriesConfig() };
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series], ANIM_SLOW);
+
+      renderer.snapshotCurveState();
+
+      // Mutate data
+      buffer.push({ timestamp: 15, value: 50 });
+      scale.setDomainX(0, 15);
+      splineCache.computeFull();
+
+      // Draw at 500ms (half of 1000ms duration)
+      vi.spyOn(performance, 'now').mockReturnValue(performance.now() + 500);
+      renderer.draw();
+
+      expect(renderer.isAnimating).toBe(true);
+      expect(renderer.needsNextFrame).toBe(true);
+
+      vi.restoreAllMocks();
+    });
+  });
+
+  describe('animation — disabled ignores duration', () => {
+    it('animation disabled with duration: 300 — snapshotCurveState does not start animation', () => {
+      const { canvas, ctx } = createCanvas();
+      const scale = makeScale();
+      scale.setDomainX(0, 10);
+      scale.setDomainY(0, 100);
+
+      const ANIM_DISABLED_WITH_DURATION: Readonly<AnimationConfig> = { enabled: false, duration: 300 };
+
+      const buffer = new RingBuffer<DataPoint>(10000);
+      buffer.push({ timestamp: 0, value: 10 });
+      buffer.push({ timestamp: 10, value: 90 });
+      const splineCache = new SplineCache(buffer);
+      splineCache.computeFull();
+
+      const series: SeriesRenderData = { buffer, splineCache, config: makeSeriesConfig() };
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series], ANIM_DISABLED_WITH_DURATION);
+
+      renderer.snapshotCurveState();
+
+      expect(renderer.isAnimating).toBe(false);
+      expect(renderer.needsNextFrame).toBe(false);
     });
   });
 

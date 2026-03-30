@@ -22,6 +22,7 @@ export interface GridConfig {
   color: string;
   opacity: number;
   lineWidth: number;
+  dashPattern: number[];
 }
 
 export interface AnimationConfig {

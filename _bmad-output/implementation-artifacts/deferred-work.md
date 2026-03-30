@@ -82,3 +82,7 @@
 ## Deferred from: code review of story-5.1 (2026-03-30)
 
 - **Stale overlay compares string literal instead of ThemeMode enum** — `glide-chart.ts:630` uses `=== 'dark'` instead of `=== ThemeMode.Dark`. Pre-existing code, not introduced by story 5.1.
+
+## ~~Deferred from: code review of 5-3-grid-gradient-and-animation-customization (2026-03-30)~~
+
+- ~~**Demo `dashedGrid` toggle state desyncs after destroy/recreate cycle**~~ — Fixed: re-applies `dashedGrid` state to all charts on recreate.

@@ -441,6 +441,22 @@ describe('resolveConfig', () => {
       expect(config.series[0]!.gradient.bottomColor).toBe('#ff0000');
     });
 
+    it('two series with per-series gradient overrides get specific gradient config merged with globals', () => {
+      const config = resolveConfig({
+        series: [
+          { id: 'a', gradient: { topColor: '#ff0000', topOpacity: 0.5 } },
+          { id: 'b', gradient: { bottomColor: '#00ff00' } },
+        ],
+      });
+      expect(config.series[0]!.gradient.topColor).toBe('#ff0000');
+      expect(config.series[0]!.gradient.topOpacity).toBe(0.5);
+      // bottomColor auto-matched to line color since not explicitly set
+      expect(config.series[0]!.gradient.bottomColor).toBe(DARK_SERIES_COLORS[0]);
+      expect(config.series[1]!.gradient.bottomColor).toBe('#00ff00');
+      // topColor auto-matched to line color since not explicitly set
+      expect(config.series[1]!.gradient.topColor).toBe(DARK_SERIES_COLORS[1]);
+    });
+
     it('explicit gradient topColor/bottomColor NOT overridden by auto-matching', () => {
       const config = resolveConfig({
         series: [{
@@ -451,6 +467,69 @@ describe('resolveConfig', () => {
       });
       expect(config.series[0]!.gradient.topColor).toBe('#00ff00');
       expect(config.series[0]!.gradient.bottomColor).toBe('#0000ff');
+    });
+  });
+
+  describe('grid config validation', () => {
+    it('grid.dashPattern with negative value throws validation error', () => {
+      expect(() => resolveConfig({ grid: { dashPattern: [4, -2] } })).toThrow(
+        'ConfigResolver: grid.dashPattern values must be non-negative finite numbers'
+      );
+    });
+
+    it('grid.dashPattern with NaN or Infinity throws validation error', () => {
+      expect(() => resolveConfig({ grid: { dashPattern: [NaN] } })).toThrow(
+        'ConfigResolver: grid.dashPattern values must be non-negative finite numbers'
+      );
+      expect(() => resolveConfig({ grid: { dashPattern: [Infinity] } })).toThrow(
+        'ConfigResolver: grid.dashPattern values must be non-negative finite numbers'
+      );
+    });
+
+    it('grid.dashPattern: [] resolves successfully (solid lines)', () => {
+      const config = resolveConfig({ grid: { dashPattern: [] } });
+      expect(config.grid.dashPattern).toEqual([]);
+    });
+
+    it('grid.dashPattern deep-merges from theme (user override replaces theme default)', () => {
+      const config = resolveConfig({ grid: { dashPattern: [6, 3] } });
+      expect(config.grid.dashPattern).toEqual([6, 3]);
+    });
+
+    it('grid.opacity: 1.5 throws validation error (out of 0-1 range)', () => {
+      expect(() => resolveConfig({ grid: { opacity: 1.5 } })).toThrow(
+        'ConfigResolver: grid.opacity must be between 0 and 1'
+      );
+    });
+
+    it('grid.lineWidth: 0 throws validation error (must be positive)', () => {
+      expect(() => resolveConfig({ grid: { lineWidth: 0 } })).toThrow(
+        'ConfigResolver: grid.lineWidth must be positive'
+      );
+    });
+  });
+
+  describe('animation config validation', () => {
+    it('animation.duration: -1 throws validation error (must be non-negative)', () => {
+      expect(() => resolveConfig({ animation: { duration: -1 } })).toThrow(
+        'ConfigResolver: animation.duration must be non-negative and finite'
+      );
+    });
+
+    it('animation.duration: NaN throws validation error (must be finite)', () => {
+      expect(() => resolveConfig({ animation: { duration: NaN } })).toThrow(
+        'ConfigResolver: animation.duration must be non-negative and finite'
+      );
+    });
+
+    it('animation.duration: 0 resolves successfully with duration: 0', () => {
+      const config = resolveConfig({ animation: { duration: 0 } });
+      expect(config.animation.duration).toBe(0);
+    });
+
+    it('animation.duration: 2000 resolves with custom duration, overriding 300ms theme default', () => {
+      const config = resolveConfig({ animation: { duration: 2000 } });
+      expect(config.animation.duration).toBe(2000);
     });
   });
 });
