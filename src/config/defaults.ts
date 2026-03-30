@@ -27,4 +27,5 @@ export const DEFAULT_CONFIG: ResolvedConfig = {
   staleThreshold: DARK_THEME.staleThreshold as number,
   timeWindow: DARK_THEME.timeWindow as number,
   zoom: DARK_THEME.zoom as boolean,
+  ariaLabel: 'Chart',
 };

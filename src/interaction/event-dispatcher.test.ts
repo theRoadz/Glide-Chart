@@ -1,5 +1,5 @@
 import { EventDispatcher } from './event-dispatcher';
-import type { PointerState, WheelState, PinchState } from './types';
+import type { PointerState, WheelState, PinchState, KeyboardState } from './types';
 
 function createContainer(): HTMLElement {
   const el = document.createElement('div');
@@ -102,18 +102,20 @@ describe('EventDispatcher', () => {
     const removeSpy = vi.spyOn(container, 'removeEventListener');
     const dispatcher = new EventDispatcher(container);
 
-    // 6 listeners registered: pointermove, pointerleave, pointerdown, pointerup, pointercancel, wheel
-    expect(addSpy).toHaveBeenCalledTimes(6);
+    // 8 listeners registered: pointermove, pointerleave, pointerdown, pointerup, pointercancel, wheel, keydown, blur
+    expect(addSpy).toHaveBeenCalledTimes(8);
 
     dispatcher.destroy();
 
-    expect(removeSpy).toHaveBeenCalledTimes(6);
+    expect(removeSpy).toHaveBeenCalledTimes(8);
     expect(removeSpy).toHaveBeenCalledWith('pointermove', expect.any(Function));
     expect(removeSpy).toHaveBeenCalledWith('pointerleave', expect.any(Function));
     expect(removeSpy).toHaveBeenCalledWith('pointerdown', expect.any(Function));
     expect(removeSpy).toHaveBeenCalledWith('pointerup', expect.any(Function));
     expect(removeSpy).toHaveBeenCalledWith('pointercancel', expect.any(Function));
     expect(removeSpy).toHaveBeenCalledWith('wheel', expect.any(Function));
+    expect(removeSpy).toHaveBeenCalledWith('keydown', expect.any(Function));
+    expect(removeSpy).toHaveBeenCalledWith('blur', expect.any(Function));
 
     // After destroy, events should not trigger subscribers
     const received: PointerState[] = [];
@@ -616,6 +618,131 @@ describe('EventDispatcher', () => {
 
       expect(container.style.touchAction).toBe('auto');
     });
+  });
+
+  describe('keyboard events', () => {
+    function dispatchKeydown(el: HTMLElement, key: string): KeyboardEvent {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+      el.dispatchEvent(event);
+      return event;
+    }
+
+    it('container gets tabindex="0" and role="img" on construction', () => {
+      const dispatcher = new EventDispatcher(container);
+
+      expect(container.getAttribute('tabindex')).toBe('0');
+      expect(container.getAttribute('role')).toBe('application');
+
+      dispatcher.destroy();
+    });
+
+    it('keydown events fire keyboard subscribers', () => {
+      const dispatcher = new EventDispatcher(container);
+      const received: KeyboardState[] = [];
+      dispatcher.subscribeKeyboard((state) => received.push({ ...state }));
+
+      dispatchKeydown(container, 'ArrowRight');
+
+      expect(received).toHaveLength(1);
+      expect(received[0]!.key).toBe('ArrowRight');
+
+      dispatcher.destroy();
+    });
+
+    it('keydown events for non-handled keys do not fire keyboard subscribers', () => {
+      const dispatcher = new EventDispatcher(container);
+      const received: KeyboardState[] = [];
+      dispatcher.subscribeKeyboard((state) => received.push({ ...state }));
+
+      dispatchKeydown(container, 'Enter');
+      dispatchKeydown(container, 'Tab');
+      dispatchKeydown(container, 'a');
+
+      expect(received).toHaveLength(0);
+
+      dispatcher.destroy();
+    });
+
+    it('blur event deactivates pointer state', () => {
+      const dispatcher = new EventDispatcher(container);
+      const received: PointerState[] = [];
+      dispatcher.subscribe((state) => received.push({ ...state }));
+
+      container.dispatchEvent(new Event('blur'));
+
+      expect(received).toHaveLength(1);
+      expect(received[0]!.active).toBe(false);
+
+      dispatcher.destroy();
+    });
+
+    it('subscribeKeyboard returns working unsubscribe function', () => {
+      const dispatcher = new EventDispatcher(container);
+      const received: KeyboardState[] = [];
+      const unsub = dispatcher.subscribeKeyboard((state) => received.push({ ...state }));
+
+      dispatchKeydown(container, 'ArrowLeft');
+      expect(received).toHaveLength(1);
+
+      unsub();
+
+      dispatchKeydown(container, 'ArrowRight');
+      expect(received).toHaveLength(1);
+
+      dispatcher.destroy();
+    });
+
+    it('destroy removes keyboard listeners', () => {
+      const removeSpy = vi.spyOn(container, 'removeEventListener');
+      const dispatcher = new EventDispatcher(container);
+      dispatcher.destroy();
+
+      expect(removeSpy).toHaveBeenCalledWith('keydown', expect.any(Function));
+      expect(removeSpy).toHaveBeenCalledWith('blur', expect.any(Function));
+
+      // After destroy, keyboard events should not trigger subscribers
+      const received: KeyboardState[] = [];
+      dispatcher.subscribeKeyboard((state) => received.push({ ...state }));
+      dispatchKeydown(container, 'ArrowRight');
+      expect(received).toHaveLength(0);
+    });
+
+    it('handled keys call preventDefault', () => {
+      const dispatcher = new EventDispatcher(container);
+      const received: KeyboardState[] = [];
+      dispatcher.subscribeKeyboard((state) => received.push({ ...state }));
+
+      const event = dispatchKeydown(container, 'ArrowRight');
+      expect(event.defaultPrevented).toBe(true);
+
+      dispatcher.destroy();
+    });
+
+    it('non-handled keys do not call preventDefault', () => {
+      const dispatcher = new EventDispatcher(container);
+
+      const event = dispatchKeydown(container, 'Tab');
+      expect(event.defaultPrevented).toBe(false);
+
+      dispatcher.destroy();
+    });
+  });
+
+  describe('pinch events (continued)', () => {
+    function mockPointerCapture(el: HTMLElement): void {
+      el.setPointerCapture = vi.fn();
+      el.releasePointerCapture = vi.fn();
+    }
+
+    function dispatchTouch(
+      el: HTMLElement,
+      type: string,
+      pointerId: number,
+      offsetX: number,
+      offsetY: number,
+    ): void {
+      dispatchPointer(el, type, { pointerType: 'touch', pointerId, offsetX, offsetY });
+    }
 
     it('setPointerCapture is called on touch pointerdown', () => {
       mockPointerCapture(container);

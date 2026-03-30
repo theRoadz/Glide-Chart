@@ -1,4 +1,4 @@
-import type { PointerState, PointerCallback, WheelState, WheelCallback, PinchState, PinchCallback } from './types';
+import type { PointerState, PointerCallback, WheelState, WheelCallback, PinchState, PinchCallback, KeyboardState, KeyboardCallback } from './types';
 
 export class EventDispatcher {
   private container: HTMLElement;
@@ -21,6 +21,10 @@ export class EventDispatcher {
   private wasPinching: boolean = false;
   private originalTouchAction: string = '';
   private touchActionOverridden: boolean = false;
+  private keyboardSubscribers: KeyboardCallback[] = [];
+  private keyboardState: KeyboardState = { key: '' };
+  private boundKeydown: (e: KeyboardEvent) => void;
+  private boundBlur: () => void;
 
   constructor(container: HTMLElement, options?: { disableTouchAction?: boolean }) {
     if (!(container instanceof HTMLElement)) {
@@ -41,6 +45,11 @@ export class EventDispatcher {
     this.boundPointerup = (e: PointerEvent) => this.handlePointerup(e);
     this.boundPointercancel = (e: PointerEvent) => this.handlePointerup(e);
     this.boundWheel = (e: WheelEvent) => this.handleWheel(e);
+    this.boundKeydown = (e: KeyboardEvent) => this.handleKeydown(e);
+    this.boundBlur = () => this.handleBlur();
+
+    container.setAttribute('tabindex', '0');
+    container.setAttribute('role', 'application');
 
     this.container.addEventListener('pointermove', this.boundPointermove);
     this.container.addEventListener('pointerleave', this.boundPointerleave);
@@ -48,6 +57,8 @@ export class EventDispatcher {
     this.container.addEventListener('pointerup', this.boundPointerup);
     this.container.addEventListener('pointercancel', this.boundPointercancel);
     this.container.addEventListener('wheel', this.boundWheel, { passive: false });
+    this.container.addEventListener('keydown', this.boundKeydown);
+    this.container.addEventListener('blur', this.boundBlur);
   }
 
   subscribe(callback: PointerCallback): () => void {
@@ -74,6 +85,14 @@ export class EventDispatcher {
     };
   }
 
+  subscribeKeyboard(callback: KeyboardCallback): () => void {
+    this.keyboardSubscribers.push(callback);
+    return () => {
+      const idx = this.keyboardSubscribers.indexOf(callback);
+      if (idx !== -1) this.keyboardSubscribers.splice(idx, 1);
+    };
+  }
+
   preventWheel(): void {
     this.currentWheelEvent?.preventDefault();
   }
@@ -85,9 +104,12 @@ export class EventDispatcher {
     this.container.removeEventListener('pointerup', this.boundPointerup);
     this.container.removeEventListener('pointercancel', this.boundPointercancel);
     this.container.removeEventListener('wheel', this.boundWheel);
+    this.container.removeEventListener('keydown', this.boundKeydown);
+    this.container.removeEventListener('blur', this.boundBlur);
     this.subscribers.length = 0;
     this.wheelSubscribers.length = 0;
     this.pinchSubscribers.length = 0;
+    this.keyboardSubscribers.length = 0;
     this.pinchPointers.clear();
     this.isPinching = false;
     this.wasPinching = false;
@@ -219,6 +241,29 @@ export class EventDispatcher {
     for (let i = 0; i < this.pinchSubscribers.length; i++) {
       const cb = this.pinchSubscribers[i];
       if (cb) cb(this.pinchState);
+    }
+  }
+
+  private handleKeydown(e: KeyboardEvent): void {
+    const key = e.key;
+    const handled = key === 'ArrowLeft' || key === 'ArrowRight' ||
+      key === '+' || key === '=' || key === '-';
+    if (!handled) return;
+
+    e.preventDefault();
+    this.keyboardState.key = key;
+    this.notifyKeyboard();
+  }
+
+  private handleBlur(): void {
+    this.state.active = false;
+    this.notify();
+  }
+
+  private notifyKeyboard(): void {
+    for (let i = 0; i < this.keyboardSubscribers.length; i++) {
+      const cb = this.keyboardSubscribers[i];
+      if (cb) cb(this.keyboardState);
     }
   }
 }

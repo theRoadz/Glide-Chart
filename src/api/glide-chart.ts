@@ -19,6 +19,7 @@ import { EventDispatcher } from '../interaction/event-dispatcher';
 import { Crosshair } from '../interaction/crosshair';
 import { Tooltip } from '../interaction/tooltip';
 import { ZoomHandler } from '../interaction/zoom-handler';
+import { KeyboardNavigator } from '../interaction/keyboard-navigator';
 import type { PointerState, CrosshairDataSource, CrosshairSeriesData } from '../interaction/types';
 import type { GlideChartConfig } from './types';
 
@@ -79,6 +80,7 @@ export class GlideChart {
   private crosshair: Crosshair;
   private tooltip: Tooltip;
   private zoomHandler: ZoomHandler;
+  private keyboardNavigator: KeyboardNavigator;
   private crosshairDataSource: CrosshairDataSource;
   private pointerState: PointerState = { x: 0, y: 0, active: false, pointerType: '' };
 
@@ -206,6 +208,9 @@ export class GlideChart {
       this.pointerState.y = state.y;
       this.pointerState.active = state.active;
       this.pointerState.pointerType = state.pointerType;
+      if (!state.active) {
+        this.keyboardNavigator.deactivate();
+      }
       this.frameScheduler.markDirty(LayerType.Interaction);
       this.tooltip.update(this.pointerState, this.resolvedConfig);
     });
@@ -225,6 +230,21 @@ export class GlideChart {
       this.zoomHandler.handlePinch(pinchState, this.resolvedConfig);
       this.tooltip.update(this.pointerState, this.resolvedConfig);
     });
+
+    // 10c. Create KeyboardNavigator and subscribe to keyboard events
+    this.keyboardNavigator = new KeyboardNavigator(
+      this.scale,
+      this.crosshairDataSource,
+      () => this.frameScheduler.markDirty(LayerType.Interaction),
+      this.zoomHandler,
+      () => this.tooltip.update(this.pointerState, this.resolvedConfig),
+    );
+    this.eventDispatcher.subscribeKeyboard((keyboardState) => {
+      this.keyboardNavigator.handleKeyboard(keyboardState, this.resolvedConfig, this.pointerState);
+    });
+
+    // 10d. Set aria-label on container
+    container.setAttribute('aria-label', this.resolvedConfig.ariaLabel);
 
     // 11. Create StaleDetector if threshold > 0
     this._onStaleChange = config?.onStaleChange;
@@ -308,6 +328,7 @@ export class GlideChart {
     }
     state.splineCache.computeFull();
 
+    this.keyboardNavigator.deactivate();
     this.zoomHandler.resetZoom();
     const scaleChanged = this.autoFitScale();
     if (scaleChanged && this.resolvedConfig.animation.enabled) {
@@ -341,6 +362,7 @@ export class GlideChart {
       }
     }
 
+    this.keyboardNavigator.deactivate();
     this.zoomHandler.resetZoom();
     this.autoFitScale();
     this.frameScheduler.markDirty(LayerType.Data);
@@ -514,6 +536,12 @@ export class GlideChart {
     this.tooltip.destroy();
     this.tooltip = new Tooltip(this.container, this.scale, this.crosshairDataSource, this.resolvedConfig);
 
+    // Update KeyboardNavigator with new data source
+    this.keyboardNavigator.updateDataSource(this.crosshairDataSource);
+
+    // Update aria-label if changed
+    this.container.setAttribute('aria-label', this.resolvedConfig.ariaLabel);
+
     this.zoomHandler.resetZoom();
     this.autoFitScale();
     this.frameScheduler.markAllDirty();
@@ -540,6 +568,7 @@ export class GlideChart {
 
     this.destroyed = true;
     this.tooltip.destroy();
+    this.keyboardNavigator.destroy();
     this.zoomHandler.destroy();
     this.eventDispatcher.destroy();
     if (this.staleDetector) {
@@ -569,6 +598,7 @@ export class GlideChart {
     this.frameScheduler = null!;
     this.eventDispatcher = null!;
     this.zoomHandler = null!;
+    this.keyboardNavigator = null!;
     this.crosshair = null!;
     this.tooltip = null!;
     this.crosshairDataSource = null!;

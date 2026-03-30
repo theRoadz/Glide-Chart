@@ -40,6 +40,7 @@ export default [
         PointerEvent: 'readonly',
         PointerEventInit: 'readonly',
         WheelEvent: 'readonly',
+        KeyboardEvent: 'readonly',
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
         setInterval: 'readonly',

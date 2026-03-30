@@ -35,6 +35,12 @@ export interface PinchState {
 
 export type PinchCallback = (state: Readonly<PinchState>) => void;
 
+export interface KeyboardState {
+  key: string;
+}
+
+export type KeyboardCallback = (state: Readonly<KeyboardState>) => void;
+
 export interface TooltipDataPoint {
   seriesId: string;
   value: number;

@@ -21,7 +21,7 @@ export const DARK_THEME: Partial<ChartConfig> = {
   grid: {
     visible: true,
     color: '#ffffff',
-    opacity: 0.06,
+    opacity: 0.35,
     lineWidth: 1,
   },
   animation: {
@@ -60,6 +60,7 @@ export const DARK_THEME: Partial<ChartConfig> = {
     borderRadius: 4,
   },
   zoom: true,
+  ariaLabel: 'Chart',
   maxDataPoints: 10000,
   staleThreshold: 5000,
   timeWindow: 0,
@@ -82,7 +83,7 @@ export const LIGHT_THEME: Partial<ChartConfig> = {
   grid: {
     visible: true,
     color: '#000000',
-    opacity: 0.08,
+    opacity: 0.5,
     lineWidth: 1,
   },
   animation: {
@@ -121,6 +122,7 @@ export const LIGHT_THEME: Partial<ChartConfig> = {
     borderRadius: 4,
   },
   zoom: true,
+  ariaLabel: 'Chart',
   maxDataPoints: 10000,
   staleThreshold: 5000,
   timeWindow: 0,

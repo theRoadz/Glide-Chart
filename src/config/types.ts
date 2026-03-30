@@ -81,6 +81,7 @@ export interface ChartConfig {
   /** Visible time window in seconds. 0 or undefined = show all data. */
   timeWindow?: number;
   zoom?: boolean;
+  ariaLabel?: string;
   onStaleChange?: (event: { seriesId: string; isStale: boolean; lastDataTimestamp: number }) => void;
 }
 
@@ -106,4 +107,5 @@ export interface ResolvedConfig {
   readonly staleThreshold: number;
   readonly timeWindow: number;
   readonly zoom: boolean;
+  readonly ariaLabel: string;
 }
