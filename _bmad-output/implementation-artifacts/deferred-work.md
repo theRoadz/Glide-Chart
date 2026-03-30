@@ -64,3 +64,8 @@
 ## ~~Deferred from: code review of story-3.3 (2026-03-29)~~
 
 - ~~**Unbounded `batchBuffer` growth under extreme throughput**~~ — Fixed: added `maxBatchBufferSize` config option (default 10000) with early flush when cap is reached.
+
+## ~~Deferred from: code review of story-3.4 (2026-03-29)~~
+
+- ~~**`setConfig` resets stale timestamps to `Date.now()`, masking genuinely stale series**~~ — Fixed: added `getState()`/`restoreState()` to `StaleDetector`; `setConfig` now preserves timestamps and stale state across detector recreation.
+- ~~**Shared mutable Set reference between detector and renderer**~~ — Fixed: `getStaleSeriesIds()` now returns a new `Set` copy instead of the internal reference.

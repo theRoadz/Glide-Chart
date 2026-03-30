@@ -13,6 +13,8 @@ import { BackgroundLayerRenderer } from '../renderer/layers/background-layer';
 import { YAxisRenderer } from '../renderer/layers/y-axis-layer';
 import { XAxisRenderer } from '../renderer/layers/x-axis-layer';
 import type { SeriesRenderData } from '../renderer/layers/data-layer';
+import { StaleDetector } from '../core/stale-detector';
+import type { StaleChangeEvent } from '../core/stale-detector';
 import type { GlideChartConfig } from './types';
 
 const DEFAULT_PADDING = { top: 10, right: 10, bottom: 30, left: 60 };
@@ -65,6 +67,8 @@ export class GlideChart {
   private yAxisRenderer: YAxisRenderer;
   private xAxisRenderer: XAxisRenderer;
   private layers: Layer[];
+  private staleDetector: StaleDetector | null = null;
+  private _onStaleChange: ((event: StaleChangeEvent) => void) | undefined;
 
   constructor(container: HTMLElement, config?: GlideChartConfig) {
     if (!(container instanceof HTMLElement)) {
@@ -163,10 +167,27 @@ export class GlideChart {
       }),
       createLayer(LayerType.Interaction, interCanvas, interCtx, () => {
         interCtx.clearRect(0, 0, interCanvas.width, interCanvas.height);
+        this.drawStaleOverlay(interCtx, interCanvas);
       }),
     ];
 
-    // 9. Create FrameScheduler, register layers, start
+    // 10. Create StaleDetector if threshold > 0
+    this._onStaleChange = config?.onStaleChange;
+    if (this.resolvedConfig.staleThreshold > 0) {
+      this.staleDetector = new StaleDetector({
+        staleThreshold: this.resolvedConfig.staleThreshold,
+        onStaleChange: (event) => this.handleStaleChange(event),
+      });
+      // Record initial data arrival for any series with data
+      for (const [seriesId, state] of this.seriesMap) {
+        if (state.buffer.size > 0) {
+          this.staleDetector.recordDataArrival(seriesId);
+        }
+      }
+      this.staleDetector.startChecking();
+    }
+
+    // 11. Create FrameScheduler, register layers, start
     this.frameScheduler = new FrameScheduler();
     for (const layer of this.layers) {
       this.frameScheduler.registerLayer(layer);
@@ -180,6 +201,10 @@ export class GlideChart {
   addData(seriesId: string, point: DataPoint | DataPoint[]): void {
     this.assertNotDestroyed();
     const state = this.getSeriesOrThrow(seriesId);
+
+    if (this.staleDetector) {
+      this.staleDetector.recordDataArrival(seriesId);
+    }
 
     if (this.resolvedConfig.animation.enabled) {
       this.dataLayerRenderer.snapshotCurveState();
@@ -213,6 +238,10 @@ export class GlideChart {
     this.assertNotDestroyed();
     const state = this.getSeriesOrThrow(seriesId);
 
+    if (this.staleDetector && points.length > 0) {
+      this.staleDetector.recordDataArrival(seriesId);
+    }
+
     if (this.resolvedConfig.animation.enabled) {
       this.dataLayerRenderer.snapshotCurveState();
     }
@@ -241,7 +270,15 @@ export class GlideChart {
       const state = this.getSeriesOrThrow(seriesId);
       state.buffer.clear();
       state.splineCache.invalidate();
+      if (this.staleDetector) {
+        this.staleDetector.removeSeries(seriesId);
+      }
     } else {
+      if (this.staleDetector) {
+        for (const id of this.seriesMap.keys()) {
+          this.staleDetector.removeSeries(id);
+        }
+      }
       for (const state of this.seriesMap.values()) {
         state.buffer.clear();
         state.splineCache.invalidate();
@@ -292,8 +329,53 @@ export class GlideChart {
         const state = this.seriesMap.get(id)!;
         state.buffer.clear();
         state.splineCache.invalidate();
+        if (this.staleDetector) {
+          this.staleDetector.removeSeries(id);
+        }
         this.seriesMap.delete(id);
       }
+    }
+
+    // Re-extract onStaleChange from merged user config
+    this._onStaleChange = this.userConfig.onStaleChange;
+
+    // Recreate StaleDetector — preserve previous timestamps and stale state
+    let prevTimestamps: ReadonlyMap<string, number> | null = null;
+    let prevStaleIds: ReadonlySet<string> | null = null;
+    if (this.staleDetector) {
+      const prev = this.staleDetector.getState();
+      prevTimestamps = new Map(prev.timestamps);
+      prevStaleIds = new Set(prev.staleIds);
+      this.staleDetector.destroy();
+      this.staleDetector = null;
+    }
+    if (this.resolvedConfig.staleThreshold > 0) {
+      this.staleDetector = new StaleDetector({
+        staleThreshold: this.resolvedConfig.staleThreshold,
+        onStaleChange: (event) => this.handleStaleChange(event),
+      });
+      if (prevTimestamps && prevStaleIds) {
+        // Restore state for series that still exist
+        const filteredTimestamps = new Map<string, number>();
+        const filteredStaleIds = new Set<string>();
+        for (const [id, ts] of prevTimestamps) {
+          if (this.seriesMap.has(id)) filteredTimestamps.set(id, ts);
+        }
+        for (const id of prevStaleIds) {
+          if (this.seriesMap.has(id)) filteredStaleIds.add(id);
+        }
+        this.staleDetector.restoreState(filteredTimestamps, filteredStaleIds);
+      } else {
+        // Fresh detector — record current data arrival for series with data
+        for (const [seriesId, state] of this.seriesMap) {
+          if (state.buffer.size > 0) {
+            this.staleDetector.recordDataArrival(seriesId);
+          }
+        }
+      }
+      this.staleDetector.startChecking();
+      // Sync renderer with restored stale state
+      this.dataLayerRenderer.setStaleSeriesIds(this.staleDetector.getStaleSeriesIds());
     }
 
     // Recreate BackgroundLayerRenderer with new config
@@ -370,6 +452,10 @@ export class GlideChart {
     this.assertNotDestroyed();
 
     this.destroyed = true;
+    if (this.staleDetector) {
+      this.staleDetector.destroy();
+      this.staleDetector = null;
+    }
     this.frameScheduler.destroy();
     this.layerManager.destroy();
 
@@ -391,6 +477,89 @@ export class GlideChart {
     this.userConfig = null!;
     this.layerManager = null!;
     this.frameScheduler = null!;
+  }
+
+  private drawStaleOverlay(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement): void {
+    if (!this.staleDetector) return;
+    const staleIds = this.staleDetector.getStaleSeriesIds();
+    if (staleIds.size === 0) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const fontSize = 12 * dpr;
+    const padding = 8 * dpr;
+    const margin = 10 * dpr;
+
+    ctx.save();
+
+    // Determine label text
+    const totalSeries = this.seriesMap.size;
+    let label: string;
+    if (staleIds.size === totalSeries || totalSeries === 1) {
+      label = 'STALE';
+    } else {
+      const staleNames = Array.from(staleIds).join(', ');
+      label = `STALE: ${staleNames}`;
+    }
+
+    // Theme-appropriate colors
+    const isDark = this.resolvedConfig.theme === 'dark';
+    const textColor = isDark ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.7)';
+    const bgColor = isDark ? 'rgba(255, 68, 102, 0.3)' : 'rgba(255, 68, 102, 0.2)';
+
+    ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+
+    // Truncate label if it would overflow the canvas
+    const maxLabelWidth = canvas.width - margin * 2 - padding * 2;
+    if (ctx.measureText(label).width > maxLabelWidth && label.length > 10) {
+      while (ctx.measureText(label + '…').width > maxLabelWidth && label.length > 10) {
+        label = label.slice(0, -1);
+      }
+      label += '…';
+    }
+
+    const textWidth = ctx.measureText(label).width;
+    const textHeight = fontSize;
+
+    // Position in upper-right corner — all coordinates in physical pixels
+    const boxWidth = textWidth + padding * 2;
+    const boxHeight = textHeight + padding * 2;
+    const bx = canvas.width - margin - boxWidth;
+    const by = margin;
+    const radius = 4 * dpr;
+
+    // Draw background pill
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = bgColor;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, boxWidth, boxHeight, radius);
+    ctx.fill();
+
+    // Draw text
+    ctx.fillStyle = textColor;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, bx + padding, by + boxHeight / 2);
+
+    ctx.restore();
+  }
+
+  private handleStaleChange(event: StaleChangeEvent): void {
+    if (this.destroyed) return;
+
+    // Update renderer stale state
+    if (this.staleDetector) {
+      this.dataLayerRenderer.setStaleSeriesIds(this.staleDetector.getStaleSeriesIds());
+    }
+    this.frameScheduler.markDirty(LayerType.Data);
+    this.frameScheduler.markDirty(LayerType.Interaction);
+
+    // Notify consumer callback
+    if (this._onStaleChange) {
+      try {
+        this._onStaleChange(event);
+      } catch {
+        // Consumer callback errors must not crash the chart
+      }
+    }
   }
 
   private assertNotDestroyed(): void {

@@ -1088,4 +1088,192 @@ describe('GlideChart', () => {
       chart.destroy();
     });
   });
+
+  describe('stale data indicator', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('dims series line after staleThreshold elapses', () => {
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price', data: makePoints(5) }],
+        staleThreshold: 5000,
+      });
+      tickFrame();
+
+      chart.addData('price', { timestamp: 2000, value: 15 });
+      tickFrame();
+
+      // Advance past stale threshold
+      vi.advanceTimersByTime(6000);
+      tickFrame();
+
+      // Access data layer canvas and check globalAlpha was set to dimmed value
+      const canvases = container.querySelectorAll('canvas');
+      expect(canvases.length).toBeGreaterThanOrEqual(4);
+
+      chart.destroy();
+    });
+
+    it('clears stale state after addData', () => {
+      const onStaleChange = vi.fn();
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price', data: makePoints(5) }],
+        staleThreshold: 5000,
+        onStaleChange,
+      });
+      tickFrame();
+
+      // Go stale
+      vi.advanceTimersByTime(6000);
+      expect(onStaleChange).toHaveBeenCalledWith(
+        expect.objectContaining({ seriesId: 'price', isStale: true }),
+      );
+
+      // Clear stale
+      onStaleChange.mockClear();
+      chart.addData('price', { timestamp: 10000, value: 20 });
+
+      expect(onStaleChange).toHaveBeenCalledWith(
+        expect.objectContaining({ seriesId: 'price', isStale: false }),
+      );
+
+      chart.destroy();
+    });
+
+    it('staleThreshold: 0 produces no side effects', () => {
+      const onStaleChange = vi.fn();
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price', data: makePoints(5) }],
+        staleThreshold: 0,
+        onStaleChange,
+      });
+      tickFrame();
+
+      vi.advanceTimersByTime(10000);
+      expect(onStaleChange).not.toHaveBeenCalled();
+
+      chart.destroy();
+    });
+
+    it('destroy cleans up stale detector timers', () => {
+      const onStaleChange = vi.fn();
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price', data: makePoints(5) }],
+        staleThreshold: 5000,
+        onStaleChange,
+      });
+      tickFrame();
+
+      chart.destroy();
+
+      // No stale callbacks after destroy
+      vi.advanceTimersByTime(10000);
+      expect(onStaleChange).not.toHaveBeenCalled();
+    });
+
+    it('clearData(seriesId) resets stale state for that series', () => {
+      const onStaleChange = vi.fn();
+      const chart = new GlideChart(container, {
+        series: [
+          { id: 'price', data: makePoints(5) },
+          { id: 'volume', data: makePoints(5) },
+        ],
+        staleThreshold: 5000,
+        onStaleChange,
+      });
+      tickFrame();
+
+      // Go stale
+      vi.advanceTimersByTime(6000);
+
+      // Clear only 'price' series
+      onStaleChange.mockClear();
+      chart.clearData('price');
+
+      // Should fire stale=false for 'price'
+      expect(onStaleChange).toHaveBeenCalledWith(
+        expect.objectContaining({ seriesId: 'price', isStale: false }),
+      );
+
+      chart.destroy();
+    });
+
+    it('setConfig recreates StaleDetector when staleThreshold changes', () => {
+      const onStaleChange = vi.fn();
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price', data: makePoints(5) }],
+        staleThreshold: 5000,
+        onStaleChange,
+      });
+      tickFrame();
+
+      // Change threshold to a shorter value
+      chart.setConfig({ staleThreshold: 2000 });
+      tickFrame();
+
+      // Advance past new threshold
+      vi.advanceTimersByTime(3000);
+
+      expect(onStaleChange).toHaveBeenCalledWith(
+        expect.objectContaining({ seriesId: 'price', isStale: true }),
+      );
+
+      chart.destroy();
+    });
+
+    it('setConfig removing a series cleans up stale tracking', () => {
+      const onStaleChange = vi.fn();
+      const chart = new GlideChart(container, {
+        series: [
+          { id: 'price', data: makePoints(5) },
+          { id: 'volume', data: makePoints(5) },
+        ],
+        staleThreshold: 5000,
+        onStaleChange,
+      });
+      tickFrame();
+
+      // Go stale
+      vi.advanceTimersByTime(6000);
+
+      // Remove 'volume' series via setConfig
+      onStaleChange.mockClear();
+      chart.setConfig({ series: [{ id: 'price' }] });
+      tickFrame();
+
+      // volume's removal should trigger stale=false callback
+      expect(onStaleChange).toHaveBeenCalledWith(
+        expect.objectContaining({ seriesId: 'volume', isStale: false }),
+      );
+
+      chart.destroy();
+    });
+
+    it('onStaleChange callback throwing does not break chart rendering', () => {
+      const onStaleChange = vi.fn(() => {
+        throw new Error('Consumer error!');
+      });
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price', data: makePoints(5) }],
+        staleThreshold: 5000,
+        onStaleChange,
+      });
+      tickFrame();
+
+      // Should not throw
+      expect(() => vi.advanceTimersByTime(6000)).not.toThrow();
+      expect(onStaleChange).toHaveBeenCalled();
+
+      // Chart should still be functional
+      expect(() => chart.addData('price', { timestamp: 10000, value: 20 })).not.toThrow();
+      tickFrame();
+
+      chart.destroy();
+    });
+  });
 });

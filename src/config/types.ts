@@ -81,6 +81,7 @@ export interface ChartConfig {
   /** Visible time window in seconds. 0 or undefined = show all data. */
   timeWindow?: number;
   zoom?: boolean;
+  onStaleChange?: (event: { seriesId: string; isStale: boolean; lastDataTimestamp: number }) => void;
 }
 
 export interface ResolvedSeriesConfig {

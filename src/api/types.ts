@@ -24,6 +24,8 @@ export { ThemeMode } from '../config/types';
 
 export type { DataSourceState, WebSocketDataSourceConfig } from '../streaming/types';
 
+export type { StaleChangeEvent } from '../core/stale-detector';
+
 import type { ChartConfig, SeriesConfig } from '../config/types';
 import type { DataPoint } from '../core/types';
 

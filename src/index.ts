@@ -18,6 +18,7 @@ export type {
   ScaleDomain,
   ScaleOptions,
   Viewport,
+  StaleChangeEvent,
 } from './api/types';
 
 export { ThemeMode } from './api/types';

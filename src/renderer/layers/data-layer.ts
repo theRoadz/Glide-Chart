@@ -22,6 +22,7 @@ export class DataLayerRenderer {
   // Stores interleaved [x0, y0, x1, y1, ...] pixel coordinates.
   private pathBuf: Float64Array;
   private pathLen = 0;
+  private staleSeriesIds: ReadonlySet<string> = new Set();
 
   // Animation state — per-series previous path buffers
   private readonly animationConfig: Readonly<AnimationConfig>;
@@ -69,6 +70,10 @@ export class DataLayerRenderer {
       this.prevPathLens = [];
       this.seriesSnapshotted = [];
     }
+  }
+
+  setStaleSeriesIds(ids: ReadonlySet<string>): void {
+    this.staleSeriesIds = ids;
   }
 
   get needsNextFrame(): boolean {
@@ -252,7 +257,10 @@ export class DataLayerRenderer {
   }
 
   private drawCurve(series: SeriesRenderData): void {
-    this.ctx.globalAlpha = series.config.line.opacity;
+    const isStale = this.staleSeriesIds.has(series.config.id);
+    this.ctx.globalAlpha = isStale
+      ? series.config.line.opacity * 0.3
+      : series.config.line.opacity;
     this.ctx.strokeStyle = series.config.line.color;
     this.ctx.lineWidth = series.config.line.width;
     this.ctx.lineJoin = 'round';
@@ -287,7 +295,14 @@ export class DataLayerRenderer {
     this.ctx.closePath();
 
     this.ctx.fillStyle = gradient;
+    const isStale = this.staleSeriesIds.has(series.config.id);
+    if (isStale) {
+      this.ctx.globalAlpha = 0.15;
+    }
     this.ctx.fill();
+    if (isStale) {
+      this.ctx.globalAlpha = 1;
+    }
   }
 
   private drawDot(point: DataPoint, config: Readonly<ResolvedSeriesConfig>): void {
