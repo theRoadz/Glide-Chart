@@ -7,7 +7,7 @@ import type {
   ResolvedSeriesConfig,
 } from './types';
 import { DEFAULT_CONFIG } from './defaults';
-import { getThemePreset } from './themes';
+import { getThemePreset, getSeriesColors } from './themes';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return (
@@ -131,13 +131,33 @@ export function resolveConfig(userConfig?: ChartConfig): ResolvedConfig {
   // Step 4: Resolve per-series configs
   const resolvedSeries: ResolvedSeriesConfig[] = [];
   if (userConfig?.series) {
-    for (const seriesEntry of userConfig.series) {
-      const resolvedLine = seriesEntry.line
+    const usePalette = !userConfig?.line?.color;
+    const palette = usePalette ? getSeriesColors(merged.theme) : [];
+
+    for (let i = 0; i < userConfig.series.length; i++) {
+      const seriesEntry = userConfig.series[i]!;
+      const resolvedLine: LineConfig = seriesEntry.line
         ? deepMerge(merged.line, seriesEntry.line)
         : { ...merged.line };
-      const resolvedGradient = seriesEntry.gradient
+
+      // Assign palette color when no explicit per-series or global line.color
+      if (usePalette && !seriesEntry.line?.color) {
+        resolvedLine.color = palette[i % palette.length]!;
+      }
+
+      const resolvedGradient: GradientConfig = seriesEntry.gradient
         ? deepMerge(merged.gradient, seriesEntry.gradient)
         : { ...merged.gradient };
+
+      // Auto-match gradient colors to series line color when neither
+      // per-series nor global user config explicitly sets gradient colors
+      const seriesLineColor = resolvedLine.color;
+      if (!seriesEntry.gradient?.topColor && !userConfig?.gradient?.topColor) {
+        resolvedGradient.topColor = seriesLineColor;
+      }
+      if (!seriesEntry.gradient?.bottomColor && !userConfig?.gradient?.bottomColor) {
+        resolvedGradient.bottomColor = seriesLineColor;
+      }
 
       resolvedSeries.push({
         id: seriesEntry.id,

@@ -1,6 +1,7 @@
 import { deepMerge, resolveConfig } from './resolver';
 import { ThemeMode } from './types';
 import { DEFAULT_CONFIG } from './defaults';
+import { DARK_SERIES_COLORS, LIGHT_SERIES_COLORS } from './themes';
 
 describe('deepMerge', () => {
   it('returns target unchanged when source is empty', () => {
@@ -146,7 +147,7 @@ describe('resolveConfig', () => {
     const series0 = config.series[0]!;
     expect(series0.gradient.topOpacity).toBe(0.5);
     expect(series0.gradient.enabled).toBe(true);
-    expect(series0.line.color).toBe('#00d4aa');
+    expect(series0.line.color).toBe(DARK_SERIES_COLORS[0]);
   });
 
   it('resolves multiple series each with different overrides', () => {
@@ -275,13 +276,16 @@ describe('resolveConfig', () => {
     ).toThrow("ConfigResolver: invalid theme 'midnight'");
   });
 
-  it('series with empty overrides inherits all global defaults', () => {
+  it('series with empty overrides gets palette color and auto-matched gradient', () => {
     const config = resolveConfig({
       series: [{ id: 'test' }],
     });
     const series0 = config.series[0]!;
-    expect(series0.line).toEqual(DEFAULT_CONFIG.line);
-    expect(series0.gradient).toEqual(DEFAULT_CONFIG.gradient);
+    expect(series0.line.color).toBe(DARK_SERIES_COLORS[0]);
+    expect(series0.line.width).toBe(DEFAULT_CONFIG.line.width);
+    expect(series0.line.opacity).toBe(DEFAULT_CONFIG.line.opacity);
+    expect(series0.gradient.topColor).toBe(DARK_SERIES_COLORS[0]);
+    expect(series0.gradient.bottomColor).toBe(DARK_SERIES_COLORS[0]);
   });
 
   it('throws for invalid per-series line.width (negative)', () => {
@@ -371,6 +375,82 @@ describe('resolveConfig', () => {
     it('merges correctly with theme preset (theme has 0, user overrides)', () => {
       const config = resolveConfig({ theme: ThemeMode.Light, timeWindow: 60 });
       expect(config.timeWindow).toBe(60);
+    });
+  });
+
+  describe('palette color assignment', () => {
+    it('two series with no color overrides get different palette colors', () => {
+      const config = resolveConfig({
+        series: [{ id: 'a' }, { id: 'b' }],
+      });
+      expect(config.series[0]!.line.color).toBe(DARK_SERIES_COLORS[0]);
+      expect(config.series[1]!.line.color).toBe(DARK_SERIES_COLORS[1]);
+    });
+
+    it('series with explicit line.color keeps its color, not overridden by palette', () => {
+      const config = resolveConfig({
+        series: [
+          { id: 'a', line: { color: '#ff0000' } },
+          { id: 'b' },
+        ],
+      });
+      expect(config.series[0]!.line.color).toBe('#ff0000');
+      expect(config.series[1]!.line.color).toBe(DARK_SERIES_COLORS[1]);
+    });
+
+    it('series at index >= palette length wraps around', () => {
+      const series = Array.from({ length: 9 }, (_, i) => ({ id: `s${i}` }));
+      const config = resolveConfig({ series });
+      expect(config.series[8]!.line.color).toBe(DARK_SERIES_COLORS[0]);
+    });
+
+    it('series gradient colors auto-match line color when no explicit gradient config', () => {
+      const config = resolveConfig({
+        series: [{ id: 'a' }, { id: 'b' }],
+      });
+      expect(config.series[0]!.gradient.topColor).toBe(DARK_SERIES_COLORS[0]);
+      expect(config.series[0]!.gradient.bottomColor).toBe(DARK_SERIES_COLORS[0]);
+      expect(config.series[1]!.gradient.topColor).toBe(DARK_SERIES_COLORS[1]);
+      expect(config.series[1]!.gradient.bottomColor).toBe(DARK_SERIES_COLORS[1]);
+    });
+
+    it('theme change (dark->light) changes palette colors to light variants', () => {
+      const config = resolveConfig({
+        theme: ThemeMode.Light,
+        series: [{ id: 'a' }, { id: 'b' }],
+      });
+      expect(config.series[0]!.line.color).toBe(LIGHT_SERIES_COLORS[0]);
+      expect(config.series[1]!.line.color).toBe(LIGHT_SERIES_COLORS[1]);
+    });
+
+    it('global line.color override applies to all series without per-series overrides (palette NOT used)', () => {
+      const config = resolveConfig({
+        line: { color: '#aabbcc' },
+        series: [{ id: 'a' }, { id: 'b' }, { id: 'c', line: { color: '#112233' } }],
+      });
+      expect(config.series[0]!.line.color).toBe('#aabbcc');
+      expect(config.series[1]!.line.color).toBe('#aabbcc');
+      expect(config.series[2]!.line.color).toBe('#112233');
+    });
+
+    it('gradient auto-matches explicit per-series line.color override', () => {
+      const config = resolveConfig({
+        series: [{ id: 'a', line: { color: '#ff0000' } }],
+      });
+      expect(config.series[0]!.gradient.topColor).toBe('#ff0000');
+      expect(config.series[0]!.gradient.bottomColor).toBe('#ff0000');
+    });
+
+    it('explicit gradient topColor/bottomColor NOT overridden by auto-matching', () => {
+      const config = resolveConfig({
+        series: [{
+          id: 'a',
+          line: { color: '#ff0000' },
+          gradient: { topColor: '#00ff00', bottomColor: '#0000ff' },
+        }],
+      });
+      expect(config.series[0]!.gradient.topColor).toBe('#00ff00');
+      expect(config.series[0]!.gradient.bottomColor).toBe('#0000ff');
     });
   });
 });

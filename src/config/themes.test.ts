@@ -1,4 +1,4 @@
-import { getThemePreset, DARK_THEME, LIGHT_THEME } from './themes';
+import { getThemePreset, DARK_THEME, LIGHT_THEME, DARK_SERIES_COLORS, LIGHT_SERIES_COLORS, getSeriesColors } from './themes';
 import { ThemeMode } from './types';
 
 /**
@@ -122,5 +122,49 @@ describe('WCAG 2.1 AA contrast ratios', () => {
       const ratio = wcagContrast(LIGHT_THEME.line!.color!, LIGHT_THEME.backgroundColor!);
       expect(ratio).toBeGreaterThanOrEqual(3);
     });
+  });
+});
+
+describe('DARK_SERIES_COLORS', () => {
+  it('has 8 colors', () => {
+    expect(DARK_SERIES_COLORS).toHaveLength(8);
+  });
+
+  it('first color matches DARK_THEME line color for backward compatibility', () => {
+    expect(DARK_SERIES_COLORS[0]).toBe(DARK_THEME.line!.color);
+  });
+
+  it('every color meets WCAG AA >= 3:1 contrast against dark background (#0a0a0f)', () => {
+    for (const color of DARK_SERIES_COLORS) {
+      const ratio = wcagContrast(color, '#0a0a0f');
+      expect(ratio).toBeGreaterThanOrEqual(3);
+    }
+  });
+});
+
+describe('LIGHT_SERIES_COLORS', () => {
+  it('has 8 colors', () => {
+    expect(LIGHT_SERIES_COLORS).toHaveLength(8);
+  });
+
+  it('first color matches LIGHT_THEME line color for backward compatibility', () => {
+    expect(LIGHT_SERIES_COLORS[0]).toBe(LIGHT_THEME.line!.color);
+  });
+
+  it('every color meets WCAG AA >= 3:1 contrast against light background (#ffffff)', () => {
+    for (const color of LIGHT_SERIES_COLORS) {
+      const ratio = wcagContrast(color, '#ffffff');
+      expect(ratio).toBeGreaterThanOrEqual(3);
+    }
+  });
+});
+
+describe('getSeriesColors', () => {
+  it('returns dark palette for ThemeMode.Dark', () => {
+    expect(getSeriesColors(ThemeMode.Dark)).toBe(DARK_SERIES_COLORS);
+  });
+
+  it('returns light palette for ThemeMode.Light', () => {
+    expect(getSeriesColors(ThemeMode.Light)).toBe(LIGHT_SERIES_COLORS);
   });
 });

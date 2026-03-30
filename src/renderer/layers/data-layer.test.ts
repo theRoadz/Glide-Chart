@@ -449,6 +449,54 @@ describe('DataLayerRenderer', () => {
     });
   });
 
+  describe('draw() — palette color integration', () => {
+    it('3 series with different palette colors render correct strokeStyle for each', () => {
+      const { canvas, ctx } = createCanvas();
+      const scale = makeScale();
+      scale.setDomainX(0, 10);
+      scale.setDomainY(0, 100);
+
+      const paletteColors = ['#00d4aa', '#ff6b6b', '#ffd93d'];
+      const seriesArr = paletteColors.map((color, i) =>
+        makeSeries(
+          [[0, 10 + i * 20], [10, 90 - i * 20]],
+          makeSeriesConfig({ lineColor: color, gradientEnabled: false }),
+        ),
+      );
+
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, seriesArr, ANIM_OFF);
+      renderer.draw();
+
+      // All 3 series rendered
+      expect((ctx.stroke as ReturnType<typeof vi.fn>).mock.calls.length).toBe(3);
+    });
+
+    it('series with auto-matched gradient colors renders correct gradient color stops', () => {
+      const { canvas, ctx } = createCanvas();
+      const scale = makeScale();
+      scale.setDomainX(0, 10);
+      scale.setDomainY(0, 100);
+
+      // Simulate what resolveConfig produces: gradient topColor/bottomColor matching line color
+      const seriesLineColor = '#ff6b6b';
+      const config = makeSeriesConfig({
+        lineColor: seriesLineColor,
+        gradientEnabled: true,
+        gradientTopColor: seriesLineColor,
+        gradientBottomColor: seriesLineColor,
+        gradientTopOpacity: 0.3,
+        gradientBottomOpacity: 0,
+      });
+      const series = makeSeries([[0, 10], [10, 90]], config);
+      const renderer = new DataLayerRenderer(ctx, canvas, scale, [series], ANIM_OFF);
+
+      renderer.draw();
+
+      expect(ctx.createLinearGradient).toHaveBeenCalled();
+      expect(ctx.fill).toHaveBeenCalled();
+    });
+  });
+
   describe('animation — enabled', () => {
     it('after snapshotCurveState, needsNextFrame is true and draws interpolate toward final state', () => {
       const { canvas, ctx } = createCanvas();

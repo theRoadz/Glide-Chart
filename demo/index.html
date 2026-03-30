@@ -168,7 +168,7 @@
 <body>
   <div class="header">
     <h1>GlideChart</h1>
-    <span class="subtitle">Developer Demo — Real-Time Streaming, Multi-Series, Crosshair, Tooltip, Scroll & Pinch Zoom, Keyboard Navigation, Dataset Lifecycle, Theme Switching</span>
+    <span class="subtitle">Developer Demo — Real-Time Streaming, Multi-Series, Crosshair, Tooltip, Scroll & Pinch Zoom, Keyboard Navigation, Dataset Lifecycle, Theme Switching, Per-Series Customization</span>
   </div>
 
   <div class="controls">
@@ -314,14 +314,12 @@
           {
             id: 'price',
             data: priceData,
-            line: { color: '#00d4aa', width: 2 },
-            gradient: { enabled: true, topColor: '#00d4aa', bottomColor: '#00d4aa', topOpacity: 0.3, bottomOpacity: 0 },
           },
           {
             id: 'volume',
             data: volumeData,
-            line: { color: '#ff8c42', width: 1.5 },
-            gradient: { enabled: true, topColor: '#ff8c42', bottomColor: '#ff8c42', topOpacity: 0.15, bottomOpacity: 0 },
+            line: { width: 1.5 },
+            gradient: { topOpacity: 0.15, bottomOpacity: 0 },
           },
         ],
       });

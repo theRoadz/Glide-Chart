@@ -128,6 +128,37 @@ export const LIGHT_THEME: Partial<ChartConfig> = {
   timeWindow: 0,
 };
 
+export const DARK_SERIES_COLORS: readonly string[] = [
+  '#00d4aa', // matches DARK_THEME.line.color
+  '#ff6b6b',
+  '#ffd93d',
+  '#6bcbff',
+  '#ff8c42',
+  '#c084fc',
+  '#22d3ee',
+  '#f472b6',
+];
+
+export const LIGHT_SERIES_COLORS: readonly string[] = [
+  '#0066cc', // matches LIGHT_THEME.line.color
+  '#cc3333',
+  '#aa7700',
+  '#0088aa',
+  '#cc5500',
+  '#7733aa',
+  '#007788',
+  '#cc3377',
+];
+
+export function getSeriesColors(mode: ThemeMode): readonly string[] {
+  switch (mode) {
+    case ThemeMode.Dark:
+      return DARK_SERIES_COLORS;
+    case ThemeMode.Light:
+      return LIGHT_SERIES_COLORS;
+  }
+}
+
 export function getThemePreset(mode: ThemeMode): Partial<ChartConfig> {
   switch (mode) {
     case ThemeMode.Dark:

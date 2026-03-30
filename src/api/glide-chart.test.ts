@@ -1,7 +1,7 @@
 import { GlideChart } from './glide-chart';
 import type { DataPoint } from '../core/types';
 import { ThemeMode } from '../config/types';
-import { DARK_THEME, LIGHT_THEME } from '../config/themes';
+import { DARK_THEME, LIGHT_THEME, DARK_SERIES_COLORS } from '../config/themes';
 import { LayerType } from '../renderer/types';
 
 // --- Mocks ---
@@ -1948,7 +1948,7 @@ describe('GlideChart', () => {
         const origDesc = Object.getOwnPropertyDescriptor(
           Object.getPrototypeOf(interCtx),
           'fillStyle',
-        ) ?? { set: (v: string) => { /* noop */ }, get: () => '#000000' };
+        ) ?? { set: (_v: string) => { /* noop */ }, get: () => '#000000' };
         Object.defineProperty(interCtx, 'fillStyle', {
           set(v: string) { fillStyles.push(v); origDesc.set!.call(this, v); },
           get() { return origDesc.get!.call(this); },
@@ -2007,6 +2007,78 @@ describe('GlideChart', () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+  });
+
+  describe('per-series config update via setConfig', () => {
+    it('setConfig with per-series line.color override updates that series, others retain palette color', () => {
+      const chart = new GlideChart(container, {
+        series: [
+          { id: 'price', data: makePoints(5) },
+          { id: 'ref', data: makePoints(5) },
+        ],
+      });
+      tickFrame();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let resolved = (chart as any).resolvedConfig;
+      expect(resolved.series[0].line.color).toBe(DARK_SERIES_COLORS[0]);
+      expect(resolved.series[1].line.color).toBe(DARK_SERIES_COLORS[1]);
+
+      chart.setConfig({
+        series: [
+          { id: 'price', line: { color: '#ff0000' } },
+          { id: 'ref' },
+        ],
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      resolved = (chart as any).resolvedConfig;
+      expect(resolved.series[0].line.color).toBe('#ff0000');
+      expect(resolved.series[1].line.color).toBe(DARK_SERIES_COLORS[1]);
+      chart.destroy();
+    });
+
+    it('setConfig with per-series width change preserves palette colors', () => {
+      const chart = new GlideChart(container, {
+        series: [
+          { id: 'price', data: makePoints(5) },
+          { id: 'ref', data: makePoints(5) },
+        ],
+      });
+      tickFrame();
+
+      chart.setConfig({
+        series: [
+          { id: 'price', line: { width: 4 } },
+          { id: 'ref' },
+        ],
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const resolved = (chart as any).resolvedConfig;
+      expect(resolved.series[0].line.width).toBe(4);
+      expect(resolved.series[0].line.color).toBe(DARK_SERIES_COLORS[0]);
+      expect(resolved.series[1].line.color).toBe(DARK_SERIES_COLORS[1]);
+      chart.destroy();
+    });
+
+    it('setConfig with global line.color override applies to all series (palette NOT used)', () => {
+      const chart = new GlideChart(container, {
+        series: [
+          { id: 'price', data: makePoints(5) },
+          { id: 'ref', data: makePoints(5) },
+        ],
+      });
+      tickFrame();
+
+      chart.setConfig({ line: { color: '#aabbcc' } });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const resolved = (chart as any).resolvedConfig;
+      expect(resolved.series[0].line.color).toBe('#aabbcc');
+      expect(resolved.series[1].line.color).toBe('#aabbcc');
+      chart.destroy();
     });
   });
 });
