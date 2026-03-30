@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-27
-last_updated: 2026-03-30  # Story 5.3 done
+last_updated: 2026-03-30  # Story 5.4 done
 project: chartview
 project_key: NOKEY
 tracking_system: file-system
@@ -86,7 +86,7 @@ development_status:
   5-1-light-and-dark-theme-presets: done
   5-2-per-series-line-customization: done
   5-3-grid-gradient-and-animation-customization: done
-  5-4-custom-tooltip-formatting: backlog
+  5-4-custom-tooltip-formatting: done
   epic-5-retrospective: optional
 
   # Epic 6: React Wrapper (2 stories)

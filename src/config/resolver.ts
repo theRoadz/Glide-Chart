@@ -123,6 +123,10 @@ function validateConfig(config: ResolvedConfig): void {
   validateGridConfig(config.grid);
   validateAnimationConfig(config.animation);
 
+  if (config.tooltip.formatter !== undefined && typeof config.tooltip.formatter !== 'function') {
+    throw new Error('ConfigResolver: tooltip.formatter must be a function');
+  }
+
   for (const series of config.series) {
     validateLineAndGradient(
       series.line,

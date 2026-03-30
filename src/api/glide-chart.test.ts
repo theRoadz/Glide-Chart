@@ -2150,4 +2150,116 @@ describe('GlideChart', () => {
       chart.destroy();
     });
   });
+
+  describe('custom tooltip formatter integration (Story 5.4)', () => {
+    function simulatePointerMove(target: HTMLElement, x: number, y: number): void {
+      target.dispatchEvent(new PointerEvent('pointermove', {
+        bubbles: true,
+        clientX: x,
+        clientY: y,
+        offsetX: x,
+        offsetY: y,
+        pointerType: 'mouse',
+      } as PointerEventInit));
+    }
+
+    it('chart with custom formatter renders custom text in tooltip on pointer move', () => {
+      const points = makePoints(10);
+      const chart = new GlideChart(container, {
+        tooltip: {
+          formatter: (pts) => pts.map(p => p.seriesId + ':' + p.value.toFixed(1)).join(', '),
+        },
+        series: [{ id: 'price', data: points }],
+      });
+      tickFrame();
+
+      // Simulate pointer move into chart area
+      simulatePointerMove(container, 400, 300);
+
+      const customEl = container.querySelector('.glide-chart-tooltip-custom') as HTMLElement;
+      expect(customEl).not.toBeNull();
+      expect(customEl.textContent).toContain('price:');
+      expect(customEl.style.display).not.toBe('none');
+
+      const timeEl = container.querySelector('.glide-chart-tooltip-time') as HTMLElement;
+      expect(timeEl.style.display).toBe('none');
+
+      chart.destroy();
+    });
+
+    it('chart without formatter renders default tooltip on pointer move', () => {
+      const points = makePoints(10);
+      const chart = new GlideChart(container, {
+        series: [{ id: 'price', data: points }],
+      });
+      tickFrame();
+
+      simulatePointerMove(container, 400, 300);
+
+      const customEl = container.querySelector('.glide-chart-tooltip-custom') as HTMLElement;
+      expect(customEl.style.display).toBe('none');
+
+      const timeEl = container.querySelector('.glide-chart-tooltip-time') as HTMLElement;
+      expect(timeEl.style.display).toBe('');
+      expect(timeEl.textContent).toBeTruthy();
+
+      chart.destroy();
+    });
+
+    it('setConfig removing formatter (via null) restores default tooltip rendering', () => {
+      const points = makePoints(10);
+      const chart = new GlideChart(container, {
+        tooltip: {
+          formatter: () => 'Custom text',
+        },
+        series: [{ id: 'price', data: points }],
+      });
+      tickFrame();
+
+      simulatePointerMove(container, 400, 300);
+      let customEl = container.querySelector('.glide-chart-tooltip-custom') as HTMLElement;
+      expect(customEl.textContent).toBe('Custom text');
+
+      // Remove formatter via setConfig using null (deepMerge deletes keys set to null;
+      // undefined is a no-op in deepMerge). setConfig destroys and recreates tooltip.
+      chart.setConfig({ tooltip: { formatter: null } } as Parameters<typeof chart.setConfig>[0]);
+
+      // Need to re-query since tooltip is recreated
+      simulatePointerMove(container, 400, 300);
+      customEl = container.querySelector('.glide-chart-tooltip-custom') as HTMLElement;
+      expect(customEl.style.display).toBe('none');
+
+      const timeEl = container.querySelector('.glide-chart-tooltip-time') as HTMLElement;
+      expect(timeEl.style.display).toBe('');
+      expect(timeEl.textContent).toBeTruthy();
+
+      chart.destroy();
+    });
+
+    it('keyboard ArrowRight navigation with custom formatter updates tooltip', () => {
+      const points = makePoints(10);
+      const chart = new GlideChart(container, {
+        tooltip: {
+          formatter: (pts) => 'KB:' + pts.map(p => p.value.toFixed(0)).join(','),
+        },
+        series: [{ id: 'price', data: points }],
+      });
+      tickFrame();
+
+      // Activate pointer first (keyboard nav requires active pointer state)
+      simulatePointerMove(container, 400, 300);
+
+      // Dispatch keyboard ArrowRight
+      container.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'ArrowRight',
+        bubbles: true,
+      }));
+
+      const customEl = container.querySelector('.glide-chart-tooltip-custom') as HTMLElement;
+      expect(customEl).not.toBeNull();
+      expect(customEl.textContent).toContain('KB:');
+
+      chart.destroy();
+    });
+  });
 });

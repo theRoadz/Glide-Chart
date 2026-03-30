@@ -509,6 +509,36 @@ describe('resolveConfig', () => {
     });
   });
 
+  describe('tooltip.formatter validation (Story 5.4)', () => {
+    it('tooltip.formatter as a function resolves successfully', () => {
+      const config = resolveConfig({
+        tooltip: { formatter: (points) => points.map(p => `${p.value}`).join(', ') },
+      });
+      expect(typeof config.tooltip.formatter).toBe('function');
+    });
+
+    it('tooltip.formatter as a non-function throws validation error', () => {
+      expect(() =>
+        resolveConfig({
+          tooltip: { formatter: 'not a function' as unknown as () => string },
+        })
+      ).toThrow('ConfigResolver: tooltip.formatter must be a function');
+    });
+
+    it('tooltip.formatter undefined (default) resolves successfully', () => {
+      const config = resolveConfig();
+      expect(config.tooltip.formatter).toBeUndefined();
+    });
+
+    it('tooltip.formatter survives deepMerge — function reference preserved', () => {
+      const myFormatter = () => 'test';
+      const config = resolveConfig({
+        tooltip: { formatter: myFormatter },
+      });
+      expect(config.tooltip.formatter).toBe(myFormatter);
+    });
+  });
+
   describe('animation config validation', () => {
     it('animation.duration: -1 throws validation error (must be non-negative)', () => {
       expect(() => resolveConfig({ animation: { duration: -1 } })).toThrow(

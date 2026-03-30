@@ -86,3 +86,9 @@
 ## ~~Deferred from: code review of 5-3-grid-gradient-and-animation-customization (2026-03-30)~~
 
 - ~~**Demo `dashedGrid` toggle state desyncs after destroy/recreate cycle**~~ — Fixed: re-applies `dashedGrid` state to all charts on recreate.
+
+## ~~Deferred from: code review of 5-4-custom-tooltip-formatting (2026-03-30)~~
+
+- ~~**Formatter returning empty string produces silent/empty ARIA announcement**~~ — Fixed: ARIA falls back to default rendering when custom content is empty
+- ~~**Formatter returning null/undefined renders literal string "null"/"undefined"**~~ — Fixed: runtime typeof check rejects non-string returns, falls back to default
+- ~~**resultPool.slice() allocates on every pointer move, defeating pool pattern**~~ — Fixed: pre-allocated formatterView array with field-copy instead of slice+map

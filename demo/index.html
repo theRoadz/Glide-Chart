@@ -168,7 +168,7 @@
 <body>
   <div class="header">
     <h1>GlideChart</h1>
-    <span class="subtitle">Developer Demo — Real-Time Streaming, Multi-Series, Crosshair, Tooltip, Scroll & Pinch Zoom, Keyboard Navigation, Dataset Lifecycle, Theme Switching, Per-Series Customization, Grid, Gradient & Animation Customization</span>
+    <span class="subtitle">Developer Demo — Real-Time Streaming, Multi-Series, Crosshair, Tooltip, Scroll & Pinch Zoom, Keyboard Navigation, Dataset Lifecycle, Theme Switching, Per-Series Customization, Grid, Gradient & Animation Customization, Custom Tooltip Formatting</span>
   </div>
 
   <div class="controls">
@@ -222,6 +222,11 @@
       <span style="font-size: 12px; color: var(--text-muted);">FPS: <strong id="stream-fps">0</strong></span>
     </div>
     <div id="chart-stream" class="chart-wrapper"></div>
+    <div class="section-label">Custom Tooltip Formatting</div>
+    <div class="controls" id="tooltip-controls">
+      <button id="btn-tooltip-toggle">Toggle Custom Formatter</button>
+    </div>
+    <div id="chart-tooltip-demo" class="chart-wrapper"></div>
   </div>
 
   <script type="module">
@@ -685,6 +690,66 @@
     });
 
     createStreamChart();
+
+    // --- Custom Tooltip Formatter Demo (Story 5.4) ---
+
+    const tooltipContainer = document.getElementById('chart-tooltip-demo');
+    const btnTooltipToggle = document.getElementById('btn-tooltip-toggle');
+    let tooltipChart = null;
+    let useCustomFormatter = true;
+
+    const customFormatter = (points) =>
+      points.map(p => '$' + p.value.toFixed(4) + ' at ' + new Date(p.timestamp).toLocaleTimeString()).join('\n');
+
+    function createTooltipDemoChart() {
+      const startTimestamp = Date.now() - 200 * 1000;
+      const priceData = generatePriceData(200, startTimestamp, 100);
+
+      tooltipChart = new GlideChart(tooltipContainer, {
+        theme: currentTheme,
+        tooltip: useCustomFormatter ? { formatter: customFormatter } : {},
+        series: [
+          {
+            id: 'price',
+            data: priceData,
+            line: { color: '#00d4aa', width: 2 },
+            gradient: { enabled: true, topColor: '#00d4aa', bottomColor: '#00d4aa', topOpacity: 0.3, bottomOpacity: 0 },
+          },
+        ],
+      });
+    }
+
+    btnTooltipToggle.addEventListener('click', () => {
+      useCustomFormatter = !useCustomFormatter;
+      btnTooltipToggle.textContent = useCustomFormatter ? 'Use Default Formatter' : 'Use Custom Formatter';
+      btnTooltipToggle.classList.toggle('active', useCustomFormatter);
+      if (tooltipChart) {
+        if (useCustomFormatter) {
+          tooltipChart.setConfig({ tooltip: { formatter: customFormatter } });
+        } else {
+          tooltipChart.setConfig({ tooltip: { formatter: null } });
+        }
+      }
+    });
+
+    // Sync theme toggle with tooltip demo chart
+    btnTheme.addEventListener('click', () => {
+      if (tooltipChart) tooltipChart.setConfig({ theme: currentTheme });
+    });
+
+    // Sync destroy/recreate
+    btnDestroy.addEventListener('click', () => {
+      if (tooltipChart && chart === null) {
+        tooltipChart.destroy();
+        tooltipChart = null;
+      } else if (!tooltipChart && chart !== null) {
+        createTooltipDemoChart();
+        if (dashedGrid) tooltipChart.setConfig({ grid: { dashPattern: [6, 3] } });
+      }
+    });
+
+    btnTooltipToggle.classList.add('active');
+    createTooltipDemoChart();
   </script>
 </body>
 </html>

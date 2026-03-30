@@ -16,7 +16,9 @@ export class Tooltip {
   private ariaEl: HTMLDivElement;
   private ariaTimer: ReturnType<typeof setTimeout> | null = null;
   private resultPool: TooltipDataPoint[];
+  private formatterView: TooltipDataPoint[];
   private activeCount = 0;
+  private customEl: HTMLDivElement;
   private rowEls: HTMLDivElement[] = [];
   private labelEls: HTMLSpanElement[] = [];
   private valueEls: HTMLSpanElement[] = [];
@@ -52,8 +54,10 @@ export class Tooltip {
 
     // Pre-allocate result pool sized to series count
     this.resultPool = new Array<TooltipDataPoint>(this.seriesCount);
+    this.formatterView = new Array<TooltipDataPoint>(this.seriesCount);
     for (let i = 0; i < this.seriesCount; i++) {
       this.resultPool[i] = { seriesId: '', value: 0, timestamp: 0 };
+      this.formatterView[i] = { seriesId: '', value: 0, timestamp: 0 };
     }
 
     // Create tooltip DOM element
@@ -98,6 +102,12 @@ export class Tooltip {
         this.valueEls.push(valueEl);
       }
     }
+
+    // Custom formatter output element
+    this.customEl = document.createElement('div');
+    this.customEl.className = 'glide-chart-tooltip-custom';
+    this.customEl.style.display = 'none';
+    this.tooltipEl.appendChild(this.customEl);
 
     this.container.appendChild(this.tooltipEl);
 
@@ -216,31 +226,65 @@ export class Tooltip {
       return;
     }
 
-    // Format timestamp
-    const firstEntry = this.resultPool[0]!;
-    const timeStr = this.formatTimestamp(firstEntry.timestamp, config);
-
-    // Update tooltip content
-    this.timeEl.textContent = timeStr;
-
-    for (let i = 0; i < this.seriesCount; i++) {
-      if (i < this.activeCount) {
-        const entry = this.resultPool[i]!;
-        const valStr = this.formatValue(entry.value, config);
-
-        if (this.seriesCount === 1) {
-          this.valueEls[i]!.textContent = valStr;
-          this.valueEls[i]!.style.display = '';
-        } else {
-          this.labelEls[i]!.textContent = entry.seriesId;
-          this.valueEls[i]!.textContent = valStr;
-          this.rowEls[i]!.style.display = '';
+    // Try custom formatter first
+    let customFormatted = false;
+    let customContent = '';
+    if (config.tooltip.formatter) {
+      try {
+        // Populate pre-allocated view with defensive copies (no heap allocation for the array itself)
+        for (let i = 0; i < this.activeCount; i++) {
+          const src = this.resultPool[i]!;
+          const dst = this.formatterView[i]!;
+          dst.seriesId = src.seriesId;
+          dst.value = src.value;
+          dst.timestamp = src.timestamp;
         }
-      } else {
-        if (this.seriesCount === 1) {
-          this.valueEls[i]!.style.display = 'none';
+        const view = this.formatterView.slice(0, this.activeCount);
+        const raw = config.tooltip.formatter(view);
+        if (typeof raw !== 'string') {
+          throw new TypeError('formatter must return a string');
+        }
+        customContent = raw;
+        this.customEl.textContent = customContent;
+        this.customEl.style.display = '';
+        this.timeEl.style.display = 'none';
+        this.hideDefaultRows();
+        customFormatted = true;
+      } catch {
+        // Fall through to default rendering below
+      }
+    }
+
+    if (!customFormatted) {
+      this.customEl.style.display = 'none';
+      this.timeEl.style.display = '';
+
+      // Format timestamp
+      const firstEntry = this.resultPool[0]!;
+      const timeStr = this.formatTimestamp(firstEntry.timestamp, config);
+
+      // Update tooltip content
+      this.timeEl.textContent = timeStr;
+
+      for (let i = 0; i < this.seriesCount; i++) {
+        if (i < this.activeCount) {
+          const entry = this.resultPool[i]!;
+          const valStr = this.formatValue(entry.value, config);
+
+          if (this.seriesCount === 1) {
+            this.valueEls[i]!.textContent = valStr;
+            this.valueEls[i]!.style.display = '';
+          } else {
+            this.labelEls[i]!.textContent = entry.seriesId;
+            this.valueEls[i]!.textContent = valStr;
+            this.rowEls[i]!.style.display = '';
+          }
         } else {
-          this.rowEls[i]!.style.display = 'none';
+          if (this.seriesCount === 1) {
+            this.valueEls[i]!.style.display = 'none';
+          } else {
+            this.rowEls[i]!.style.display = 'none';
+          }
         }
       }
     }
@@ -250,7 +294,9 @@ export class Tooltip {
     this.positionTooltip(pointerState.x, pointerState.y);
 
     // Schedule debounced ARIA update
-    this.scheduleAriaUpdate(timeStr, config);
+    // Pass customText to ARIA only when non-empty; empty string falls back to default ARIA rendering
+    const ariaCustomText = customFormatted && customContent ? customContent : undefined;
+    this.scheduleAriaUpdate(customFormatted && ariaCustomText ? undefined : this.formatTimestamp(this.resultPool[0]!.timestamp, config), config, ariaCustomText);
   }
 
   hide(): void {
@@ -339,10 +385,24 @@ export class Tooltip {
     return this.numberFmt.format(value);
   }
 
-  private scheduleAriaUpdate(timeStr: string, config: Readonly<ResolvedConfig>): void {
+  private hideDefaultRows(): void {
+    for (let i = 0; i < this.seriesCount; i++) {
+      if (this.seriesCount === 1) {
+        this.valueEls[i]!.style.display = 'none';
+      } else {
+        this.rowEls[i]!.style.display = 'none';
+      }
+    }
+  }
+
+  private scheduleAriaUpdate(timeStr: string | undefined, config: Readonly<ResolvedConfig>, customText?: string): void {
     this.clearAriaTimer();
     this.ariaTimer = setTimeout(() => {
-      const parts: string[] = [timeStr + ':'];
+      if (customText !== undefined) {
+        this.ariaEl.textContent = customText;
+        return;
+      }
+      const parts: string[] = [(timeStr ?? '') + ':'];
       for (let i = 0; i < this.activeCount; i++) {
         const entry = this.resultPool[i]!;
         const valStr = this.formatValue(entry.value, config);

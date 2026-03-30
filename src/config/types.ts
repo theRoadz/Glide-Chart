@@ -57,6 +57,7 @@ export interface TooltipConfig {
   fontFamily: string;
   padding: number;
   borderRadius: number;
+  formatter?: (points: ReadonlyArray<Readonly<{ seriesId: string; value: number; timestamp: number }>>) => string;
 }
 
 export interface SeriesConfig {

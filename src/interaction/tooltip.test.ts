@@ -365,4 +365,267 @@ describe('Tooltip', () => {
       () => new Tooltip(container, scale, ds, null as unknown as ResolvedConfig),
     ).toThrow('Tooltip: config is required');
   });
+
+  describe('custom tooltip formatter (Story 5.4)', () => {
+    it('renders custom formatter output in customEl, hides timestamp and default rows', () => {
+      const scale = createScale();
+      const buffer = createBufferWithData([{ timestamp: 2000, value: 50 }]);
+      const ds = createDataSource([{ id: 's0', buffer }]);
+      const formatter = (points: ReadonlyArray<Readonly<{ seriesId: string; value: number; timestamp: number }>>) =>
+        points.map(p => `${p.seriesId}:${p.value}`).join(', ');
+      const config = createConfig({ tooltip: { formatter } });
+
+      const tooltip = new Tooltip(container, scale, ds, config);
+      const px = scale.xToPixel(2000);
+      tooltip.update(createPointerState({ x: px, y: 200 }), config);
+
+      const customEl = container.querySelector('.glide-chart-tooltip-custom') as HTMLElement;
+      expect(customEl.textContent).toBe('s0:50');
+      expect(customEl.style.display).not.toBe('none');
+
+      const timeEl = container.querySelector('.glide-chart-tooltip-time') as HTMLElement;
+      expect(timeEl.style.display).toBe('none');
+
+      const valueEl = container.querySelector('.glide-chart-tooltip-value') as HTMLElement;
+      expect(valueEl.style.display).toBe('none');
+    });
+
+    it('formatter receives correct TooltipDataPoint array with seriesId, value, timestamp', () => {
+      const scale = createScale();
+      const buffer = createBufferWithData([
+        { timestamp: 2000, value: 42.5 },
+        { timestamp: 3000, value: 75 },
+      ]);
+      const ds = createDataSource([{ id: 'price', buffer }]);
+      const receivedPoints: Array<{ seriesId: string; value: number; timestamp: number }> = [];
+      const formatter = (points: ReadonlyArray<Readonly<{ seriesId: string; value: number; timestamp: number }>>) => {
+        receivedPoints.push(...points);
+        return 'test';
+      };
+      const config = createConfig({ tooltip: { formatter } });
+
+      const tooltip = new Tooltip(container, scale, ds, config);
+      const px = scale.xToPixel(3000);
+      tooltip.update(createPointerState({ x: px, y: 200 }), config);
+
+      expect(receivedPoints).toHaveLength(1);
+      expect(receivedPoints[0]!.seriesId).toBe('price');
+      expect(receivedPoints[0]!.value).toBe(75);
+      expect(receivedPoints[0]!.timestamp).toBe(3000);
+    });
+
+    it('multi-series formatter receives all active series data points', () => {
+      const scale = createScale();
+      const buf1 = createBufferWithData([{ timestamp: 2000, value: 50 }]);
+      const buf2 = createBufferWithData([{ timestamp: 2000, value: 75 }]);
+      const ds = createDataSource([
+        { id: 'price', buffer: buf1 },
+        { id: 'volume', buffer: buf2 },
+      ]);
+      const receivedPoints: Array<{ seriesId: string; value: number; timestamp: number }> = [];
+      const formatter = (points: ReadonlyArray<Readonly<{ seriesId: string; value: number; timestamp: number }>>) => {
+        receivedPoints.push(...points);
+        return points.map(p => `${p.seriesId}:${p.value}`).join(', ');
+      };
+      const config = createConfig({ seriesCount: 2, tooltip: { formatter } });
+
+      const tooltip = new Tooltip(container, scale, ds, config);
+      const px = scale.xToPixel(2000);
+      tooltip.update(createPointerState({ x: px, y: 200 }), config);
+
+      expect(receivedPoints).toHaveLength(2);
+      expect(receivedPoints[0]!.seriesId).toBe('price');
+      expect(receivedPoints[0]!.value).toBe(50);
+      expect(receivedPoints[1]!.seriesId).toBe('volume');
+      expect(receivedPoints[1]!.value).toBe(75);
+
+      const customEl = container.querySelector('.glide-chart-tooltip-custom') as HTMLElement;
+      expect(customEl.textContent).toBe('price:50, volume:75');
+    });
+
+    it('formatter that throws falls back to default rendering', () => {
+      const scale = createScale();
+      const buffer = createBufferWithData([{ timestamp: 2000, value: 50 }]);
+      const ds = createDataSource([{ id: 's0', buffer }]);
+      const formatter = () => {
+        throw new Error('formatter error');
+      };
+      const config = createConfig({ tooltip: { formatter } });
+
+      const tooltip = new Tooltip(container, scale, ds, config);
+      const px = scale.xToPixel(2000);
+      tooltip.update(createPointerState({ x: px, y: 200 }), config);
+
+      const customEl = container.querySelector('.glide-chart-tooltip-custom') as HTMLElement;
+      expect(customEl.style.display).toBe('none');
+
+      const timeEl = container.querySelector('.glide-chart-tooltip-time') as HTMLElement;
+      expect(timeEl.style.display).toBe('');
+      expect(timeEl.textContent).toBeTruthy();
+
+      const valueEl = container.querySelector('.glide-chart-tooltip-value') as HTMLElement;
+      expect(valueEl.textContent).toBeTruthy();
+    });
+
+    it('tooltip WITHOUT custom formatter renders default format (regression guard)', () => {
+      const scale = createScale();
+      const buffer = createBufferWithData([{ timestamp: 2000, value: 50 }]);
+      const ds = createDataSource([{ id: 's0', buffer }]);
+      const config = createConfig();
+
+      const tooltip = new Tooltip(container, scale, ds, config);
+      const px = scale.xToPixel(2000);
+      tooltip.update(createPointerState({ x: px, y: 200 }), config);
+
+      const customEl = container.querySelector('.glide-chart-tooltip-custom') as HTMLElement;
+      expect(customEl.style.display).toBe('none');
+
+      const timeEl = container.querySelector('.glide-chart-tooltip-time') as HTMLElement;
+      expect(timeEl.style.display).toBe('');
+      expect(timeEl.textContent).toBeTruthy();
+
+      const valueEl = container.querySelector('.glide-chart-tooltip-value') as HTMLElement;
+      expect(valueEl.textContent).toBeTruthy();
+    });
+
+    it('custom formatter output used in ARIA live region text', () => {
+      vi.useFakeTimers();
+
+      const scale = createScale();
+      const buffer = createBufferWithData([{ timestamp: 2000, value: 50 }]);
+      const ds = createDataSource([{ id: 's0', buffer }]);
+      const formatter = () => 'Custom ARIA text';
+      const config = createConfig({ tooltip: { formatter } });
+
+      const tooltip = new Tooltip(container, scale, ds, config);
+      const px = scale.xToPixel(2000);
+      tooltip.update(createPointerState({ x: px, y: 200 }), config);
+
+      vi.advanceTimersByTime(300);
+
+      const ariaEl = container.querySelector('[aria-live="polite"]') as HTMLElement;
+      expect(ariaEl.textContent).toBe('Custom ARIA text');
+
+      vi.useRealTimers();
+    });
+
+    it('switching from custom formatter to no formatter restores default rendering', () => {
+      const scale = createScale();
+      const buffer = createBufferWithData([{ timestamp: 2000, value: 50 }]);
+      const ds = createDataSource([{ id: 's0', buffer }]);
+      const formatter = () => 'Custom output';
+      const configWithFormatter = createConfig({ tooltip: { formatter } });
+      const configWithoutFormatter = createConfig();
+
+      const tooltip = new Tooltip(container, scale, ds, configWithFormatter);
+      const px = scale.xToPixel(2000);
+      const state = createPointerState({ x: px, y: 200 });
+
+      // First update with formatter
+      tooltip.update(state, configWithFormatter);
+      const customEl = container.querySelector('.glide-chart-tooltip-custom') as HTMLElement;
+      expect(customEl.textContent).toBe('Custom output');
+      expect(customEl.style.display).not.toBe('none');
+
+      // Second update without formatter
+      tooltip.update(state, configWithoutFormatter);
+      expect(customEl.style.display).toBe('none');
+
+      const timeEl = container.querySelector('.glide-chart-tooltip-time') as HTMLElement;
+      expect(timeEl.style.display).toBe('');
+      expect(timeEl.textContent).toBeTruthy();
+
+      const valueEl = container.querySelector('.glide-chart-tooltip-value') as HTMLElement;
+      expect(valueEl.textContent).toBeTruthy();
+    });
+
+    it('formatter returning null falls back to default rendering', () => {
+      const scale = createScale();
+      const buffer = createBufferWithData([{ timestamp: 2000, value: 50 }]);
+      const ds = createDataSource([{ id: 's0', buffer }]);
+      const formatter = (() => null) as unknown as () => string;
+      const config = createConfig({ tooltip: { formatter } });
+
+      const tooltip = new Tooltip(container, scale, ds, config);
+      const px = scale.xToPixel(2000);
+      tooltip.update(createPointerState({ x: px, y: 200 }), config);
+
+      const customEl = container.querySelector('.glide-chart-tooltip-custom') as HTMLElement;
+      expect(customEl.style.display).toBe('none');
+
+      const timeEl = container.querySelector('.glide-chart-tooltip-time') as HTMLElement;
+      expect(timeEl.style.display).toBe('');
+      expect(timeEl.textContent).toBeTruthy();
+    });
+
+    it('formatter returning undefined falls back to default rendering', () => {
+      const scale = createScale();
+      const buffer = createBufferWithData([{ timestamp: 2000, value: 50 }]);
+      const ds = createDataSource([{ id: 's0', buffer }]);
+      const formatter = (() => undefined) as unknown as () => string;
+      const config = createConfig({ tooltip: { formatter } });
+
+      const tooltip = new Tooltip(container, scale, ds, config);
+      const px = scale.xToPixel(2000);
+      tooltip.update(createPointerState({ x: px, y: 200 }), config);
+
+      const customEl = container.querySelector('.glide-chart-tooltip-custom') as HTMLElement;
+      expect(customEl.style.display).toBe('none');
+
+      const timeEl = container.querySelector('.glide-chart-tooltip-time') as HTMLElement;
+      expect(timeEl.style.display).toBe('');
+      expect(timeEl.textContent).toBeTruthy();
+    });
+
+    it('formatter returning empty string renders custom but ARIA falls back to default', () => {
+      vi.useFakeTimers();
+
+      const scale = createScale();
+      const buffer = createBufferWithData([{ timestamp: 2000, value: 50 }]);
+      const ds = createDataSource([{ id: 's0', buffer }]);
+      const formatter = () => '';
+      const config = createConfig({ tooltip: { formatter } });
+
+      const tooltip = new Tooltip(container, scale, ds, config);
+      const px = scale.xToPixel(2000);
+      tooltip.update(createPointerState({ x: px, y: 200 }), config);
+
+      // Custom el is shown (empty string is still valid visual output)
+      const customEl = container.querySelector('.glide-chart-tooltip-custom') as HTMLElement;
+      expect(customEl.style.display).not.toBe('none');
+
+      // But ARIA falls back to default rendering (non-empty)
+      vi.advanceTimersByTime(300);
+      const ariaEl = container.querySelector('[aria-live="polite"]') as HTMLElement;
+      expect(ariaEl.textContent).toBeTruthy();
+      expect(ariaEl.textContent).not.toBe('');
+
+      vi.useRealTimers();
+    });
+
+    it('formatter cannot mutate internal resultPool via passed points', () => {
+      const scale = createScale();
+      const buffer = createBufferWithData([{ timestamp: 2000, value: 50 }]);
+      const ds = createDataSource([{ id: 's0', buffer }]);
+      const formatter = (points: ReadonlyArray<Readonly<{ seriesId: string; value: number; timestamp: number }>>) => {
+        // Attempt to mutate — should not affect internal state
+        (points[0] as { value: number }).value = 999;
+        return 'mutated';
+      };
+      const config = createConfig({ tooltip: { formatter } });
+      const configDefault = createConfig();
+
+      const tooltip = new Tooltip(container, scale, ds, config);
+      const px = scale.xToPixel(2000);
+      const state = createPointerState({ x: px, y: 200 });
+
+      // First update — formatter mutates its copy
+      tooltip.update(state, config);
+
+      // Second update — switch to default rendering; value should still be 50, not 999
+      tooltip.update(state, configDefault);
+      const valueEl = container.querySelector('.glide-chart-tooltip-value') as HTMLElement;
+      expect(valueEl.textContent).not.toContain('999');
+    });
+  });
 });
