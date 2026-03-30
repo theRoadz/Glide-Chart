@@ -32,10 +32,14 @@ function createConfig(
   } as unknown as ResolvedConfig;
 }
 
-function createDataSource(buffers: RingBuffer<DataPoint>[] = []): CrosshairDataSource {
+function createDataSource(buffers: RingBuffer<DataPoint>[] = [], ids?: string[]): CrosshairDataSource {
+  const seriesData = buffers.map((buffer, i) => ({
+    id: ids?.[i] ?? `s${i}`,
+    buffer,
+  }));
   return {
-    getBuffers(): Iterable<RingBuffer<DataPoint>> {
-      return buffers;
+    getSeries() {
+      return seriesData;
     },
   };
 }

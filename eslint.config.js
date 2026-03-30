@@ -21,6 +21,8 @@ export default [
         document: 'readonly',
         HTMLElement: 'readonly',
         HTMLCanvasElement: 'readonly',
+        HTMLDivElement: 'readonly',
+        HTMLSpanElement: 'readonly',
         CanvasRenderingContext2D: 'readonly',
         ResizeObserver: 'readonly',
         ResizeObserverCallback: 'readonly',

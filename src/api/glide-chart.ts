@@ -17,7 +17,8 @@ import { StaleDetector } from '../core/stale-detector';
 import type { StaleChangeEvent } from '../core/stale-detector';
 import { EventDispatcher } from '../interaction/event-dispatcher';
 import { Crosshair } from '../interaction/crosshair';
-import type { PointerState, CrosshairDataSource } from '../interaction/types';
+import { Tooltip } from '../interaction/tooltip';
+import type { PointerState, CrosshairDataSource, CrosshairSeriesData } from '../interaction/types';
 import type { GlideChartConfig } from './types';
 
 const DEFAULT_PADDING = { top: 10, right: 10, bottom: 30, left: 60 };
@@ -57,6 +58,7 @@ function validateDataPoint(point: DataPoint): void {
 }
 
 export class GlideChart {
+  private container: HTMLElement;
   private destroyed = false;
   private initialized = false;
   private resolvedConfig: ResolvedConfig;
@@ -74,6 +76,7 @@ export class GlideChart {
   private _onStaleChange: ((event: StaleChangeEvent) => void) | undefined;
   private eventDispatcher: EventDispatcher;
   private crosshair: Crosshair;
+  private tooltip: Tooltip;
   private crosshairDataSource: CrosshairDataSource;
   private pointerState: PointerState = { x: 0, y: 0, active: false, pointerType: '' };
 
@@ -81,6 +84,8 @@ export class GlideChart {
     if (!(container instanceof HTMLElement)) {
       throw new Error('GlideChart: container must be an HTMLElement');
     }
+
+    this.container = container;
 
     // 1. Resolve config
     this.userConfig = config ?? {};
@@ -179,14 +184,18 @@ export class GlideChart {
       }),
     ];
 
-    // 10. Create EventDispatcher and Crosshair
-    const buffers = Array.from(this.seriesMap.values(), (s) => s.buffer);
+    // 10. Create EventDispatcher, Crosshair, and Tooltip
+    const seriesDataList: CrosshairSeriesData[] = Array.from(
+      this.seriesMap.entries(),
+      ([id, s]) => ({ id, buffer: s.buffer }),
+    );
     this.crosshairDataSource = {
-      getBuffers(): Iterable<RingBuffer<DataPoint>> {
-        return buffers;
+      getSeries() {
+        return seriesDataList;
       },
     };
     this.crosshair = new Crosshair(this.scale, this.crosshairDataSource);
+    this.tooltip = new Tooltip(container, this.scale, this.crosshairDataSource, this.resolvedConfig);
     this.eventDispatcher = new EventDispatcher(container);
     this.eventDispatcher.subscribe((state) => {
       this.pointerState.x = state.x;
@@ -194,6 +203,7 @@ export class GlideChart {
       this.pointerState.active = state.active;
       this.pointerState.pointerType = state.pointerType;
       this.frameScheduler.markDirty(LayerType.Interaction);
+      this.tooltip.update(this.pointerState, this.resolvedConfig);
     });
 
     // 11. Create StaleDetector if threshold > 0
@@ -454,6 +464,34 @@ export class GlideChart {
       };
     }
 
+    // Recreate CrosshairDataSource with updated series
+    const updatedSeriesDataList: CrosshairSeriesData[] = Array.from(
+      this.seriesMap.entries(),
+      ([id, s]) => ({ id, buffer: s.buffer }),
+    );
+    this.crosshairDataSource = {
+      getSeries() {
+        return updatedSeriesDataList;
+      },
+    };
+    this.crosshair = new Crosshair(this.scale, this.crosshairDataSource);
+
+    // Update interaction layer draw callback
+    const interLayer = this.layers.find((l) => l.type === LayerType.Interaction);
+    if (interLayer) {
+      const interCanvas = this.layerManager.getCanvas(LayerType.Interaction);
+      const interCtx = this.layerManager.getContext(LayerType.Interaction);
+      interLayer.draw = () => {
+        interCtx.clearRect(0, 0, interCanvas.width, interCanvas.height);
+        this.crosshair.draw(interCtx, this.pointerState, this.resolvedConfig);
+        this.drawStaleOverlay(interCtx, interCanvas);
+      };
+    }
+
+    // Recreate Tooltip with new config (locale/timezone/formatters may have changed)
+    this.tooltip.destroy();
+    this.tooltip = new Tooltip(this.container, this.scale, this.crosshairDataSource, this.resolvedConfig);
+
     this.autoFitScale();
     this.frameScheduler.markAllDirty();
   }
@@ -477,6 +515,7 @@ export class GlideChart {
     this.assertNotDestroyed();
 
     this.destroyed = true;
+    this.tooltip.destroy();
     this.eventDispatcher.destroy();
     if (this.staleDetector) {
       this.staleDetector.destroy();
@@ -505,6 +544,7 @@ export class GlideChart {
     this.frameScheduler = null!;
     this.eventDispatcher = null!;
     this.crosshair = null!;
+    this.tooltip = null!;
     this.crosshairDataSource = null!;
   }
 

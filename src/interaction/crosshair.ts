@@ -74,9 +74,9 @@ export class Crosshair {
     let closestDistance = Infinity;
     let closestValue: number | null = null;
 
-    for (const buffer of this.dataSource.getBuffers()) {
-      for (let i = 0; i < buffer.size; i++) {
-        const point = buffer.get(i);
+    for (const series of this.dataSource.getSeries()) {
+      for (let i = 0; i < series.buffer.size; i++) {
+        const point = series.buffer.get(i);
         if (!point) continue;
         const distance = Math.abs(point.timestamp - timestamp);
         if (distance < closestDistance) {

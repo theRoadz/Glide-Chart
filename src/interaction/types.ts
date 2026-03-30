@@ -10,6 +10,17 @@ export interface PointerState {
 
 export type PointerCallback = (state: Readonly<PointerState>) => void;
 
+export interface CrosshairSeriesData {
+  id: string;
+  buffer: RingBuffer<DataPoint>;
+}
+
 export interface CrosshairDataSource {
-  getBuffers(): Iterable<RingBuffer<DataPoint>>;
+  getSeries(): Iterable<CrosshairSeriesData>;
+}
+
+export interface TooltipDataPoint {
+  seriesId: string;
+  value: number;
+  timestamp: number;
 }
