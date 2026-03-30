@@ -15,8 +15,9 @@ function makeScale(width = 800, height = 600): Scale {
   return scale;
 }
 
-function makeConfig(overrides?: Partial<{ visible: boolean; color: string; opacity: number; lineWidth: number }>): Readonly<ResolvedConfig> {
+function makeConfig(overrides?: Partial<{ visible: boolean; color: string; opacity: number; lineWidth: number; backgroundColor: string }>): Readonly<ResolvedConfig> {
   return resolveConfig({
+    backgroundColor: overrides?.backgroundColor,
     grid: {
       visible: overrides?.visible ?? true,
       color: overrides?.color ?? '#ffffff',
@@ -40,6 +41,7 @@ function createRenderer(opts?: {
   color?: string;
   opacity?: number;
   lineWidth?: number;
+  backgroundColor?: string;
 }) {
   const width = opts?.width ?? 800;
   const height = opts?.height ?? 600;
@@ -51,6 +53,7 @@ function createRenderer(opts?: {
     color: opts?.color,
     opacity: opts?.opacity,
     lineWidth: opts?.lineWidth,
+    backgroundColor: opts?.backgroundColor,
   });
   const renderer = new BackgroundLayerRenderer(ctx, canvas, scale, config);
   return { renderer, ctx, canvas, scale, config };
@@ -126,14 +129,47 @@ describe('BackgroundLayerRenderer', () => {
       expect(ctx.globalAlpha).toBe(1.0);
     });
 
-    it('renders nothing when grid.visible === false (only clearRect called)', () => {
+    it('renders no grid lines when grid.visible === false (background fill still renders)', () => {
       const { renderer, ctx } = createRenderer({ visible: false });
       const clearSpy = vi.spyOn(ctx, 'clearRect');
+      const fillRectSpy = vi.spyOn(ctx, 'fillRect');
       const beginPathSpy = vi.spyOn(ctx, 'beginPath');
       renderer.draw();
 
       expect(clearSpy).toHaveBeenCalledOnce();
+      expect(fillRectSpy).toHaveBeenCalledOnce();
       expect(beginPathSpy).not.toHaveBeenCalled();
+    });
+
+    it('fills background color before drawing grid lines', () => {
+      const { renderer, ctx } = createRenderer();
+      const fillRectSpy = vi.spyOn(ctx, 'fillRect');
+      const beginPathSpy = vi.spyOn(ctx, 'beginPath');
+      renderer.draw();
+
+      expect(fillRectSpy).toHaveBeenCalledWith(0, 0, 800, 600);
+      // fillRect should be called before beginPath (grid lines)
+      expect(fillRectSpy.mock.invocationCallOrder[0]).toBeLessThan(
+        beginPathSpy.mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it('uses configured backgroundColor for fill', () => {
+      const { renderer, ctx } = createRenderer({ backgroundColor: '#ffffff' });
+      const fillRectSpy = vi.spyOn(ctx, 'fillRect');
+      renderer.draw();
+
+      expect(fillRectSpy).toHaveBeenCalledWith(0, 0, 800, 600);
+      // Verify fillStyle was set to the configured backgroundColor
+      expect(ctx.fillStyle).toBe('#ffffff');
+    });
+
+    it('renders background fill even when grid is hidden', () => {
+      const { renderer, ctx } = createRenderer({ visible: false, backgroundColor: '#ff0000' });
+      const fillRectSpy = vi.spyOn(ctx, 'fillRect');
+      renderer.draw();
+
+      expect(fillRectSpy).toHaveBeenCalledWith(0, 0, 800, 600);
     });
 
     it('produces reasonable number of grid lines', () => {

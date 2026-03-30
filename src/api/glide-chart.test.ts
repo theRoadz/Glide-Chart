@@ -1,5 +1,7 @@
 import { GlideChart } from './glide-chart';
 import type { DataPoint } from '../core/types';
+import { ThemeMode } from '../config/types';
+import { DARK_THEME, LIGHT_THEME } from '../config/themes';
 import { LayerType } from '../renderer/types';
 
 // --- Mocks ---
@@ -1814,6 +1816,197 @@ describe('GlideChart', () => {
       expect(cancelSpy).toHaveBeenCalled();
       cancelSpy.mockRestore();
       chart.destroy();
+    });
+  });
+
+  describe('theme switching (Story 5.1)', () => {
+    it('switching from dark to light applies all light theme values', () => {
+      const chart = new GlideChart(container, {
+        theme: ThemeMode.Dark,
+        series: [{ id: 'price', data: makePoints(5) }],
+      });
+      tickFrame();
+
+      chart.setConfig({ theme: ThemeMode.Light });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const resolved = (chart as any).resolvedConfig;
+
+      expect(resolved.backgroundColor).toBe(LIGHT_THEME.backgroundColor);
+      expect(resolved.line.color).toBe(LIGHT_THEME.line!.color);
+      expect(resolved.grid.color).toBe(LIGHT_THEME.grid!.color);
+      expect(resolved.crosshair.color).toBe(LIGHT_THEME.crosshair!.color);
+      expect(resolved.tooltip.backgroundColor).toBe(LIGHT_THEME.tooltip!.backgroundColor);
+      expect(resolved.tooltip.textColor).toBe(LIGHT_THEME.tooltip!.textColor);
+      expect(resolved.xAxis.labelColor).toBe(LIGHT_THEME.xAxis!.labelColor);
+      expect(resolved.yAxis.labelColor).toBe(LIGHT_THEME.yAxis!.labelColor);
+      chart.destroy();
+    });
+
+    it('switching from light to dark applies all dark theme values', () => {
+      const chart = new GlideChart(container, {
+        theme: ThemeMode.Light,
+        series: [{ id: 'price', data: makePoints(5) }],
+      });
+      tickFrame();
+
+      chart.setConfig({ theme: ThemeMode.Dark });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const resolved = (chart as any).resolvedConfig;
+
+      expect(resolved.backgroundColor).toBe(DARK_THEME.backgroundColor);
+      expect(resolved.line.color).toBe(DARK_THEME.line!.color);
+      expect(resolved.grid.color).toBe(DARK_THEME.grid!.color);
+      expect(resolved.crosshair.color).toBe(DARK_THEME.crosshair!.color);
+      expect(resolved.tooltip.backgroundColor).toBe(DARK_THEME.tooltip!.backgroundColor);
+      expect(resolved.tooltip.textColor).toBe(DARK_THEME.tooltip!.textColor);
+      expect(resolved.xAxis.labelColor).toBe(DARK_THEME.xAxis!.labelColor);
+      expect(resolved.yAxis.labelColor).toBe(DARK_THEME.yAxis!.labelColor);
+      chart.destroy();
+    });
+
+    it('theme switch preserves per-series color overrides', () => {
+      const customLineColor = '#ff00ff';
+      const chart = new GlideChart(container, {
+        theme: ThemeMode.Dark,
+        series: [{ id: 'price', data: makePoints(5), line: { color: customLineColor, width: 2, opacity: 1 } }],
+      });
+      tickFrame();
+
+      chart.setConfig({ theme: ThemeMode.Light });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const resolved = (chart as any).resolvedConfig;
+
+      // Per-series override preserved
+      expect(resolved.series[0].line.color).toBe(customLineColor);
+      // Non-overridden theme values changed to light
+      expect(resolved.backgroundColor).toBe(LIGHT_THEME.backgroundColor);
+      chart.destroy();
+    });
+
+    it('theme switch marks all layers dirty', () => {
+      const chart = new GlideChart(container, {
+        theme: ThemeMode.Dark,
+        series: [{ id: 'price', data: makePoints(5) }],
+      });
+      tickFrame();
+
+      chart.setConfig({ theme: ThemeMode.Light });
+      // markAllDirty sets dirty flags on all layers
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scheduler = (chart as any).frameScheduler;
+      const dirtyFlags: Map<LayerType, boolean> = scheduler._dirtyFlags;
+      expect(dirtyFlags.get(LayerType.Background)).toBe(true);
+      expect(dirtyFlags.get(LayerType.Data)).toBe(true);
+      expect(dirtyFlags.get(LayerType.Axis)).toBe(true);
+      expect(dirtyFlags.get(LayerType.Interaction)).toBe(true);
+      chart.destroy();
+    });
+
+    it('theme switch preserves data — buffers and spline caches remain intact', () => {
+      const points = makePoints(10);
+      const chart = new GlideChart(container, {
+        theme: ThemeMode.Dark,
+        series: [{ id: 'price', data: points }],
+      });
+      tickFrame();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const bufferBefore = (chart as any).seriesMap.get('price').buffer;
+      const sizeBefore = bufferBefore.size;
+
+      chart.setConfig({ theme: ThemeMode.Light });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const bufferAfter = (chart as any).seriesMap.get('price').buffer;
+      expect(bufferAfter.size).toBe(sizeBefore);
+      expect(bufferAfter).toBe(bufferBefore); // Same buffer instance
+      chart.destroy();
+    });
+
+    it('stale overlay uses theme-aware colors — dark uses light text, light uses dark text', () => {
+      vi.useFakeTimers();
+      try {
+        const chart = new GlideChart(container, {
+          theme: ThemeMode.Dark,
+          staleThreshold: 100,
+          series: [{ id: 'price', data: makePoints(5) }],
+        });
+        tickFrame();
+
+        // Trigger stale state
+        chart.addData('price', { timestamp: 9999, value: 50 });
+        vi.advanceTimersByTime(200);
+        tickFrame();
+
+        // Get the interaction layer canvas context (last canvas = interaction layer)
+        const canvases = container.querySelectorAll('canvas');
+        const interCanvas = canvases[canvases.length - 1] as HTMLCanvasElement;
+        const interCtx = interCanvas.getContext('2d')!;
+
+        // Track all fillStyle assignments via property descriptor spy
+        const fillStyles: string[] = [];
+        const origDesc = Object.getOwnPropertyDescriptor(
+          Object.getPrototypeOf(interCtx),
+          'fillStyle',
+        ) ?? { set: (v: string) => { /* noop */ }, get: () => '#000000' };
+        Object.defineProperty(interCtx, 'fillStyle', {
+          set(v: string) { fillStyles.push(v); origDesc.set!.call(this, v); },
+          get() { return origDesc.get!.call(this); },
+          configurable: true,
+        });
+
+        // Verify dark theme stale overlay colors
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const c = chart as any;
+        fillStyles.length = 0;
+        c.drawStaleOverlay(interCtx, interCanvas);
+        expect(fillStyles).toContain('rgba(255, 68, 102, 0.3)');
+        expect(fillStyles).toContain('rgba(255, 255, 255, 0.8)');
+
+        // Switch to light theme and re-draw stale overlay
+        chart.setConfig({ theme: ThemeMode.Light });
+        fillStyles.length = 0;
+        c.drawStaleOverlay(interCtx, interCanvas);
+        expect(fillStyles).toContain('rgba(255, 68, 102, 0.2)');
+        expect(fillStyles).toContain('rgba(0, 0, 0, 0.7)');
+
+        chart.destroy();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('onStaleChange callback persists and fires correctly after theme switch', () => {
+      vi.useFakeTimers();
+      try {
+        const onStaleChange = vi.fn();
+        const chart = new GlideChart(container, {
+          theme: ThemeMode.Dark,
+          staleThreshold: 50,
+          series: [{ id: 'price', data: makePoints(3) }],
+          onStaleChange,
+        });
+        tickFrame();
+
+        chart.setConfig({ theme: ThemeMode.Light });
+
+        // onStaleChange should still be registered after theme switch
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const c = chart as any;
+        expect(c._onStaleChange).toBe(onStaleChange);
+
+        // Verify callback actually fires after theme switch by triggering staleness
+        onStaleChange.mockClear();
+        chart.addData('price', { timestamp: 9999, value: 50 });
+        vi.advanceTimersByTime(100);
+        expect(onStaleChange).toHaveBeenCalledWith(
+          expect.objectContaining({ seriesId: 'price', isStale: true }),
+        );
+
+        chart.destroy();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

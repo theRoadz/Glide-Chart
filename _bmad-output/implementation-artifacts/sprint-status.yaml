@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-27
-last_updated: 2026-03-30  # Story 4.6 done
+last_updated: 2026-03-30  # Story 5.1 done
 project: chartview
 project_key: NOKEY
 tracking_system: file-system
@@ -82,8 +82,8 @@ development_status:
   epic-4-retrospective: optional
 
   # Epic 5: Theming & Customization (4 stories)
-  epic-5: backlog
-  5-1-light-and-dark-theme-presets: backlog
+  epic-5: in-progress
+  5-1-light-and-dark-theme-presets: done
   5-2-per-series-line-customization: backlog
   5-3-grid-gradient-and-animation-customization: backlog
   5-4-custom-tooltip-formatting: backlog

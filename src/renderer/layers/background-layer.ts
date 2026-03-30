@@ -60,6 +60,10 @@ export class BackgroundLayerRenderer {
   draw(): void {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
+    // Fill background color (always, even if grid is hidden)
+    this.ctx.fillStyle = this.config.backgroundColor;
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
     if (!this.config.grid.visible) {
       return;
     }

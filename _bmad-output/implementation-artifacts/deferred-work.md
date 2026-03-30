@@ -78,3 +78,7 @@
 
 - **`setData` with duplicate timestamps causes division by zero in `SplineCache.computeTangents`** — `h[k] = points[k+1].timestamp - points[k].timestamp` produces 0 when consecutive timestamps match; `delta[k]` becomes `Infinity`/`NaN`. The `recomputeTail` path has a `hi === 0` guard but `computeFull` (used by `setData`) does not. Pre-existing in spline math.
 - **`setData` partial failure leaves buffer in inconsistent state** — Buffer is cleared first (`state.buffer.clear()`), then points are pushed one-by-one with validation. If a mid-array point fails validation, the buffer is left with partial data and spline cache is never recomputed. The operation is non-atomic. Pre-existing design in `glide-chart.ts`.
+
+## Deferred from: code review of story-5.1 (2026-03-30)
+
+- **Stale overlay compares string literal instead of ThemeMode enum** — `glide-chart.ts:630` uses `=== 'dark'` instead of `=== ThemeMode.Dark`. Pre-existing code, not introduced by story 5.1.
