@@ -15,6 +15,9 @@ import { XAxisRenderer } from '../renderer/layers/x-axis-layer';
 import type { SeriesRenderData } from '../renderer/layers/data-layer';
 import { StaleDetector } from '../core/stale-detector';
 import type { StaleChangeEvent } from '../core/stale-detector';
+import { EventDispatcher } from '../interaction/event-dispatcher';
+import { Crosshair } from '../interaction/crosshair';
+import type { PointerState, CrosshairDataSource } from '../interaction/types';
 import type { GlideChartConfig } from './types';
 
 const DEFAULT_PADDING = { top: 10, right: 10, bottom: 30, left: 60 };
@@ -69,6 +72,10 @@ export class GlideChart {
   private layers: Layer[];
   private staleDetector: StaleDetector | null = null;
   private _onStaleChange: ((event: StaleChangeEvent) => void) | undefined;
+  private eventDispatcher: EventDispatcher;
+  private crosshair: Crosshair;
+  private crosshairDataSource: CrosshairDataSource;
+  private pointerState: PointerState = { x: 0, y: 0, active: false, pointerType: '' };
 
   constructor(container: HTMLElement, config?: GlideChartConfig) {
     if (!(container instanceof HTMLElement)) {
@@ -167,11 +174,29 @@ export class GlideChart {
       }),
       createLayer(LayerType.Interaction, interCanvas, interCtx, () => {
         interCtx.clearRect(0, 0, interCanvas.width, interCanvas.height);
+        this.crosshair.draw(interCtx, this.pointerState, this.resolvedConfig);
         this.drawStaleOverlay(interCtx, interCanvas);
       }),
     ];
 
-    // 10. Create StaleDetector if threshold > 0
+    // 10. Create EventDispatcher and Crosshair
+    const buffers = Array.from(this.seriesMap.values(), (s) => s.buffer);
+    this.crosshairDataSource = {
+      getBuffers(): Iterable<RingBuffer<DataPoint>> {
+        return buffers;
+      },
+    };
+    this.crosshair = new Crosshair(this.scale, this.crosshairDataSource);
+    this.eventDispatcher = new EventDispatcher(container);
+    this.eventDispatcher.subscribe((state) => {
+      this.pointerState.x = state.x;
+      this.pointerState.y = state.y;
+      this.pointerState.active = state.active;
+      this.pointerState.pointerType = state.pointerType;
+      this.frameScheduler.markDirty(LayerType.Interaction);
+    });
+
+    // 11. Create StaleDetector if threshold > 0
     this._onStaleChange = config?.onStaleChange;
     if (this.resolvedConfig.staleThreshold > 0) {
       this.staleDetector = new StaleDetector({
@@ -452,6 +477,7 @@ export class GlideChart {
     this.assertNotDestroyed();
 
     this.destroyed = true;
+    this.eventDispatcher.destroy();
     if (this.staleDetector) {
       this.staleDetector.destroy();
       this.staleDetector = null;
@@ -477,6 +503,9 @@ export class GlideChart {
     this.userConfig = null!;
     this.layerManager = null!;
     this.frameScheduler = null!;
+    this.eventDispatcher = null!;
+    this.crosshair = null!;
+    this.crosshairDataSource = null!;
   }
 
   private drawStaleOverlay(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement): void {

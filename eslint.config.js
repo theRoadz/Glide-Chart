@@ -35,6 +35,8 @@ export default [
         MessageEvent: 'readonly',
         CloseEvent: 'readonly',
         Event: 'readonly',
+        PointerEvent: 'readonly',
+        PointerEventInit: 'readonly',
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
         setInterval: 'readonly',
