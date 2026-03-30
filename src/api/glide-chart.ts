@@ -2,7 +2,7 @@ import type { DataPoint } from '../core/types';
 import { RingBuffer, getVisibleWindow } from '../core/ring-buffer';
 import { SplineCache } from '../core/spline-cache';
 import { Scale } from '../core/scale';
-import type { ChartConfig, ResolvedConfig, ResolvedSeriesConfig } from '../config/types';
+import type { ChartConfig, ResolvedConfig, ResolvedSeriesConfig, CrosshairMoveEvent, ZoomEvent } from '../config/types';
 import { deepMerge, resolveConfig } from '../config/resolver';
 import type { Layer } from '../renderer/types';
 import { LayerType } from '../renderer/types';
@@ -76,6 +76,10 @@ export class GlideChart {
   private layers: Layer[];
   private staleDetector: StaleDetector | null = null;
   private _onStaleChange: ((event: StaleChangeEvent) => void) | undefined;
+  private _onCrosshairMove: ((event: CrosshairMoveEvent) => void) | undefined;
+  private _onZoom: ((event: ZoomEvent) => void) | undefined;
+  private _prevZoomDomainMin = 0;
+  private _prevZoomDomainMax = 0;
   private eventDispatcher: EventDispatcher;
   private crosshair: Crosshair;
   private tooltip: Tooltip;
@@ -213,6 +217,11 @@ export class GlideChart {
       }
       this.frameScheduler.markDirty(LayerType.Interaction);
       this.tooltip.update(this.pointerState, this.resolvedConfig);
+      if (this._onCrosshairMove) {
+        try {
+          this._onCrosshairMove(this.buildCrosshairMoveEvent(state));
+        } catch { /* Consumer callback errors must not crash the chart */ }
+      }
     });
 
     // 10b. Create ZoomHandler and subscribe to wheel events
@@ -225,10 +234,12 @@ export class GlideChart {
     this.eventDispatcher.subscribeWheel((wheelState) => {
       this.zoomHandler.handleWheel(wheelState, this.resolvedConfig);
       this.tooltip.update(this.pointerState, this.resolvedConfig);
+      this.fireZoomCallback();
     });
     this.eventDispatcher.subscribePinch((pinchState) => {
       this.zoomHandler.handlePinch(pinchState, this.resolvedConfig);
       this.tooltip.update(this.pointerState, this.resolvedConfig);
+      this.fireZoomCallback();
     });
 
     // 10c. Create KeyboardNavigator and subscribe to keyboard events
@@ -241,6 +252,7 @@ export class GlideChart {
     );
     this.eventDispatcher.subscribeKeyboard((keyboardState) => {
       this.keyboardNavigator.handleKeyboard(keyboardState, this.resolvedConfig, this.pointerState);
+      this.fireZoomCallback();
     });
 
     // 10d. Set aria-label on container
@@ -248,6 +260,10 @@ export class GlideChart {
 
     // 11. Create StaleDetector if threshold > 0
     this._onStaleChange = config?.onStaleChange;
+    this._onCrosshairMove = config?.onCrosshairMove;
+    this._onZoom = config?.onZoom;
+    this._prevZoomDomainMin = this.scale.domainX.min;
+    this._prevZoomDomainMax = this.scale.domainX.max;
     if (this.resolvedConfig.staleThreshold > 0) {
       this.staleDetector = new StaleDetector({
         staleThreshold: this.resolvedConfig.staleThreshold,
@@ -415,8 +431,10 @@ export class GlideChart {
       }
     }
 
-    // Re-extract onStaleChange from merged user config
+    // Re-extract callbacks from merged user config
     this._onStaleChange = this.userConfig.onStaleChange;
+    this._onCrosshairMove = this.userConfig.onCrosshairMove;
+    this._onZoom = this.userConfig.onZoom;
 
     // Recreate StaleDetector — preserve previous timestamps and stale state
     let prevTimestamps: ReadonlyMap<string, number> | null = null;
@@ -544,6 +562,8 @@ export class GlideChart {
 
     this.zoomHandler.resetZoom();
     this.autoFitScale();
+    this._prevZoomDomainMin = this.scale.domainX.min;
+    this._prevZoomDomainMax = this.scale.domainX.max;
     this.frameScheduler.markAllDirty();
   }
 
@@ -602,6 +622,9 @@ export class GlideChart {
     this.crosshair = null!;
     this.tooltip = null!;
     this.crosshairDataSource = null!;
+    this._onStaleChange = undefined;
+    this._onCrosshairMove = undefined;
+    this._onZoom = undefined;
   }
 
   private drawStaleOverlay(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement): void {
@@ -828,6 +851,62 @@ export class GlideChart {
       oldDomainY.min !== newDomainY.min ||
       oldDomainY.max !== newDomainY.max
     );
+  }
+
+  private buildCrosshairMoveEvent(state: PointerState): CrosshairMoveEvent {
+    const viewport = this.scale.viewport;
+    const isInPlotArea =
+      state.x >= viewport.x &&
+      state.x <= viewport.x + viewport.width &&
+      state.y >= viewport.y &&
+      state.y <= viewport.y + viewport.height;
+
+    if (!isInPlotArea || !state.active) {
+      return { x: state.x, y: state.y, timestamp: 0, active: false, points: [] };
+    }
+
+    const timestamp = this.scale.pixelToX(state.x);
+    const points: Array<{ seriesId: string; value: number; timestamp: number }> = [];
+
+    for (const series of this.crosshairDataSource.getSeries()) {
+      let closestDistance = Infinity;
+      let closestValue = 0;
+      let closestTimestamp = 0;
+
+      for (let i = 0; i < series.buffer.size; i++) {
+        const point = series.buffer.get(i);
+        if (!point) continue;
+        const distance = Math.abs(point.timestamp - timestamp);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestValue = point.value;
+          closestTimestamp = point.timestamp;
+        } else if (point.timestamp > timestamp) {
+          break;
+        }
+      }
+
+      if (closestDistance < Infinity) {
+        points.push({ seriesId: series.id, value: closestValue, timestamp: closestTimestamp });
+      }
+    }
+
+    return { x: state.x, y: state.y, timestamp, active: true, points };
+  }
+
+  private fireZoomCallback(): void {
+    if (!this._onZoom) return;
+    const { min, max } = this.scale.domainX;
+    if (min === this._prevZoomDomainMin && max === this._prevZoomDomainMax) return;
+    this._prevZoomDomainMin = min;
+    this._prevZoomDomainMax = max;
+    try {
+      this._onZoom({
+        domainXMin: min,
+        domainXMax: max,
+        isZoomed: this.zoomHandler.isZoomed,
+      });
+    } catch { /* Consumer callback errors must not crash the chart */ }
   }
 
   private handleResize(width: number, height: number, dpr: number): void {

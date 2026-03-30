@@ -2262,4 +2262,309 @@ describe('GlideChart', () => {
       chart.destroy();
     });
   });
+
+  describe('onCrosshairMove callback (Story 6.2)', () => {
+    function simulatePointerMove(target: HTMLElement, x: number, y: number): void {
+      target.dispatchEvent(new PointerEvent('pointermove', {
+        bubbles: true,
+        clientX: x,
+        clientY: y,
+        offsetX: x,
+        offsetY: y,
+        pointerType: 'mouse',
+      } as PointerEventInit));
+    }
+
+    function simulatePointerLeave(target: HTMLElement): void {
+      target.dispatchEvent(new PointerEvent('pointerleave', {
+        bubbles: true,
+        pointerType: 'mouse',
+      } as PointerEventInit));
+    }
+
+    it('callback fires when pointer events are dispatched on the container', () => {
+      const onCrosshairMove = vi.fn();
+      const chart = new GlideChart(container, {
+        onCrosshairMove,
+        series: [{ id: 'price', data: makePoints(10) }],
+      });
+      tickFrame();
+
+      simulatePointerMove(container, 400, 300);
+
+      expect(onCrosshairMove).toHaveBeenCalled();
+      chart.destroy();
+    });
+
+    it('callback receives correct event shape', () => {
+      const onCrosshairMove = vi.fn();
+      const chart = new GlideChart(container, {
+        onCrosshairMove,
+        series: [{ id: 'price', data: makePoints(10) }],
+      });
+      tickFrame();
+
+      simulatePointerMove(container, 400, 300);
+
+      expect(onCrosshairMove).toHaveBeenCalledWith(
+        expect.objectContaining({
+          x: expect.any(Number),
+          y: expect.any(Number),
+          timestamp: expect.any(Number),
+          active: expect.any(Boolean),
+          points: expect.any(Array),
+        })
+      );
+
+      const event = onCrosshairMove.mock.calls[0][0];
+      if (event.active && event.points.length > 0) {
+        expect(event.points[0]).toEqual(
+          expect.objectContaining({
+            seriesId: 'price',
+            value: expect.any(Number),
+            timestamp: expect.any(Number),
+          })
+        );
+      }
+      chart.destroy();
+    });
+
+    it('callback fires with active: false when pointer leaves chart', () => {
+      const onCrosshairMove = vi.fn();
+      const chart = new GlideChart(container, {
+        onCrosshairMove,
+        series: [{ id: 'price', data: makePoints(10) }],
+      });
+      tickFrame();
+
+      // First move in
+      simulatePointerMove(container, 400, 300);
+      onCrosshairMove.mockClear();
+
+      // Then leave
+      simulatePointerLeave(container);
+
+      expect(onCrosshairMove).toHaveBeenCalled();
+      const event = onCrosshairMove.mock.calls[0][0];
+      expect(event.active).toBe(false);
+      chart.destroy();
+    });
+
+    it('callback errors do not crash the chart', () => {
+      const onCrosshairMove = vi.fn().mockImplementation(() => {
+        throw new Error('Consumer error');
+      });
+      const chart = new GlideChart(container, {
+        onCrosshairMove,
+        series: [{ id: 'price', data: makePoints(10) }],
+      });
+      tickFrame();
+
+      expect(() => simulatePointerMove(container, 400, 300)).not.toThrow();
+      expect(onCrosshairMove).toHaveBeenCalled();
+      chart.destroy();
+    });
+
+    it('callback is updated via setConfig()', () => {
+      const cb1 = vi.fn();
+      const cb2 = vi.fn();
+      const chart = new GlideChart(container, {
+        onCrosshairMove: cb1,
+        series: [{ id: 'price', data: makePoints(10) }],
+      });
+      tickFrame();
+
+      chart.setConfig({ onCrosshairMove: cb2 });
+
+      simulatePointerMove(container, 400, 300);
+
+      expect(cb2).toHaveBeenCalled();
+      expect(cb1).not.toHaveBeenCalled();
+      chart.destroy();
+    });
+  });
+
+  describe('onZoom callback (Story 6.2)', () => {
+    function simulatePointerMove(target: HTMLElement, x: number, y: number): void {
+      target.dispatchEvent(new PointerEvent('pointermove', {
+        bubbles: true,
+        clientX: x,
+        clientY: y,
+        offsetX: x,
+        offsetY: y,
+        pointerType: 'mouse',
+      } as PointerEventInit));
+    }
+
+    function simulateWheel(target: HTMLElement, deltaY: number, x = 400, y = 300): void {
+      target.dispatchEvent(new WheelEvent('wheel', {
+        bubbles: true,
+        deltaY,
+        clientX: x,
+        clientY: y,
+      }));
+    }
+
+    it('callback fires on wheel zoom with correct domain values', () => {
+      const onZoom = vi.fn();
+      const chart = new GlideChart(container, {
+        onZoom,
+        zoom: true,
+        series: [{ id: 'price', data: makePoints(20) }],
+      });
+      tickFrame();
+
+      // Activate pointer first (zoom requires pointer in chart area)
+      simulatePointerMove(container, 400, 300);
+      simulateWheel(container, -100);
+
+      expect(onZoom).toHaveBeenCalled();
+      const event = onZoom.mock.calls[0][0];
+      expect(event).toEqual(
+        expect.objectContaining({
+          domainXMin: expect.any(Number),
+          domainXMax: expect.any(Number),
+          isZoomed: expect.any(Boolean),
+        })
+      );
+      chart.destroy();
+    });
+
+    it('callback fires on keyboard +/- zoom', () => {
+      const onZoom = vi.fn();
+      const chart = new GlideChart(container, {
+        onZoom,
+        zoom: true,
+        series: [{ id: 'price', data: makePoints(20) }],
+      });
+      tickFrame();
+
+      // Activate pointer and keyboard navigation first (zoom keys require active keyboard nav index)
+      simulatePointerMove(container, 400, 300);
+      container.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      onZoom.mockClear();
+
+      container.dispatchEvent(new KeyboardEvent('keydown', {
+        key: '+',
+        bubbles: true,
+      }));
+
+      expect(onZoom).toHaveBeenCalled();
+      chart.destroy();
+    });
+
+    it('callback does NOT fire on arrow key navigation (domain dedup prevents it)', () => {
+      const onZoom = vi.fn();
+      const chart = new GlideChart(container, {
+        onZoom,
+        zoom: true,
+        series: [{ id: 'price', data: makePoints(20) }],
+      });
+      tickFrame();
+
+      // Activate pointer first
+      simulatePointerMove(container, 400, 300);
+      onZoom.mockClear();
+
+      container.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'ArrowRight',
+        bubbles: true,
+      }));
+
+      expect(onZoom).not.toHaveBeenCalled();
+      chart.destroy();
+    });
+
+    it('callback fires with isZoomed: true after zoom', () => {
+      const onZoom = vi.fn();
+      const chart = new GlideChart(container, {
+        onZoom,
+        zoom: true,
+        series: [{ id: 'price', data: makePoints(20) }],
+      });
+      tickFrame();
+
+      simulatePointerMove(container, 400, 300);
+      simulateWheel(container, -100);
+
+      expect(onZoom).toHaveBeenCalled();
+      const event = onZoom.mock.calls[onZoom.mock.calls.length - 1][0];
+      expect(event.isZoomed).toBe(true);
+      chart.destroy();
+    });
+
+    it('callback errors do not crash the chart', () => {
+      const onZoom = vi.fn().mockImplementation(() => {
+        throw new Error('Consumer error');
+      });
+      const chart = new GlideChart(container, {
+        onZoom,
+        zoom: true,
+        series: [{ id: 'price', data: makePoints(20) }],
+      });
+      tickFrame();
+
+      simulatePointerMove(container, 400, 300);
+      expect(() => simulateWheel(container, -100)).not.toThrow();
+      expect(onZoom).toHaveBeenCalled();
+      chart.destroy();
+    });
+
+    it('callback is updated via setConfig()', () => {
+      const cb1 = vi.fn();
+      const cb2 = vi.fn();
+      const chart = new GlideChart(container, {
+        onZoom: cb1,
+        zoom: true,
+        series: [{ id: 'price', data: makePoints(20) }],
+      });
+      tickFrame();
+
+      chart.setConfig({ onZoom: cb2 });
+
+      simulatePointerMove(container, 400, 300);
+      simulateWheel(container, -100);
+
+      expect(cb2).toHaveBeenCalled();
+      expect(cb1).not.toHaveBeenCalled();
+      chart.destroy();
+    });
+
+    it('callback does NOT fire when zoom: false', () => {
+      const onZoom = vi.fn();
+      const chart = new GlideChart(container, {
+        onZoom,
+        zoom: false,
+        series: [{ id: 'price', data: makePoints(20) }],
+      });
+      tickFrame();
+
+      simulatePointerMove(container, 400, 300);
+      simulateWheel(container, -100);
+
+      expect(onZoom).not.toHaveBeenCalled();
+      chart.destroy();
+    });
+
+    it('setData() resets zoom but does NOT fire onZoom', () => {
+      const onZoom = vi.fn();
+      const chart = new GlideChart(container, {
+        onZoom,
+        zoom: true,
+        series: [{ id: 'price', data: makePoints(20) }],
+      });
+      tickFrame();
+
+      // Zoom in first
+      simulatePointerMove(container, 400, 300);
+      simulateWheel(container, -100);
+      onZoom.mockClear();
+
+      // setData resets zoom — should NOT fire onZoom
+      chart.setData('price', makePoints(20));
+
+      expect(onZoom).not.toHaveBeenCalled();
+      chart.destroy();
+    });
+  });
 });

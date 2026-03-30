@@ -285,4 +285,144 @@ describe('GlideChart React Component', () => {
     expect(mockClearData).not.toHaveBeenCalled();
     expect(mockResize).not.toHaveBeenCalled();
   });
+
+  describe('streaming data diffing (Story 6.2)', () => {
+    it('streaming={true} + longer data array calls addData() with new tail points', () => {
+      const data1 = createTestData(3);
+      const { rerender } = render(
+        <GlideChart streaming={true} series={[{ id: 'price', data: data1 }]} />
+      );
+
+      mockAddData.mockClear();
+      mockSetData.mockClear();
+
+      const data2 = [...data1, ...createTestData(2)];
+      rerender(
+        <GlideChart streaming={true} series={[{ id: 'price', data: data2 }]} />
+      );
+
+      expect(mockAddData).toHaveBeenCalledTimes(1);
+      expect(mockAddData).toHaveBeenCalledWith('price', data2.slice(3));
+      expect(mockSetData).not.toHaveBeenCalled();
+    });
+
+    it('streaming={true} + shorter data array falls back to setData()', () => {
+      const data1 = createTestData(5);
+      const { rerender } = render(
+        <GlideChart streaming={true} series={[{ id: 'price', data: data1 }]} />
+      );
+
+      mockAddData.mockClear();
+      mockSetData.mockClear();
+
+      const data2 = createTestData(3);
+      rerender(
+        <GlideChart streaming={true} series={[{ id: 'price', data: data2 }]} />
+      );
+
+      expect(mockSetData).toHaveBeenCalledWith('price', data2);
+      expect(mockAddData).not.toHaveBeenCalled();
+    });
+
+    it('streaming={true} + same reference triggers no API call', () => {
+      const data = createTestData(3);
+      const { rerender } = render(
+        <GlideChart streaming={true} series={[{ id: 'price', data }]} />
+      );
+
+      mockAddData.mockClear();
+      mockSetData.mockClear();
+
+      rerender(
+        <GlideChart streaming={true} series={[{ id: 'price', data }]} />
+      );
+
+      expect(mockAddData).not.toHaveBeenCalled();
+      expect(mockSetData).not.toHaveBeenCalled();
+    });
+
+    it('streaming={false} (default) + longer data array calls setData() not addData()', () => {
+      const data1 = createTestData(3);
+      const { rerender } = render(
+        <GlideChart series={[{ id: 'price', data: data1 }]} />
+      );
+
+      mockAddData.mockClear();
+      mockSetData.mockClear();
+
+      const data2 = [...data1, ...createTestData(2)];
+      rerender(
+        <GlideChart series={[{ id: 'price', data: data2 }]} />
+      );
+
+      expect(mockSetData).toHaveBeenCalledWith('price', data2);
+      expect(mockAddData).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('event callback props (Story 6.2)', () => {
+    it('onCrosshairMove prop is passed through to core config', () => {
+      const onCrosshairMove = vi.fn();
+      render(<GlideChart onCrosshairMove={onCrosshairMove} />);
+
+      expect(MockGlideChartCore).toHaveBeenCalledTimes(1);
+      const [, config] = MockGlideChartCore.mock.calls[0] as [HTMLElement, Record<string, unknown>];
+      expect(config.onCrosshairMove).toBe(onCrosshairMove);
+    });
+
+    it('onZoom prop is passed through to core config', () => {
+      const onZoom = vi.fn();
+      render(<GlideChart onZoom={onZoom} />);
+
+      expect(MockGlideChartCore).toHaveBeenCalledTimes(1);
+      const [, config] = MockGlideChartCore.mock.calls[0] as [HTMLElement, Record<string, unknown>];
+      expect(config.onZoom).toBe(onZoom);
+    });
+
+    it('changing onCrosshairMove identity triggers setConfig()', () => {
+      const cb1 = vi.fn();
+      const cb2 = vi.fn();
+      const { rerender } = render(<GlideChart onCrosshairMove={cb1} />);
+
+      mockSetConfig.mockClear();
+
+      rerender(<GlideChart onCrosshairMove={cb2} />);
+
+      expect(mockSetConfig).toHaveBeenCalledTimes(1);
+      expect(mockSetConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ onCrosshairMove: cb2 })
+      );
+    });
+
+    it('changing onZoom identity triggers setConfig()', () => {
+      const cb1 = vi.fn();
+      const cb2 = vi.fn();
+      const { rerender } = render(<GlideChart onZoom={cb1} />);
+
+      mockSetConfig.mockClear();
+
+      rerender(<GlideChart onZoom={cb2} />);
+
+      expect(mockSetConfig).toHaveBeenCalledTimes(1);
+      expect(mockSetConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ onZoom: cb2 })
+      );
+    });
+
+    it('onCrosshairMove and onZoom excluded from JSON config comparison', () => {
+      const cb = vi.fn();
+      const { rerender } = render(
+        <GlideChart onCrosshairMove={cb} onZoom={cb} theme={ThemeMode.Dark} />
+      );
+
+      mockSetConfig.mockClear();
+
+      // Re-render with same callbacks and same config — no setConfig call
+      rerender(
+        <GlideChart onCrosshairMove={cb} onZoom={cb} theme={ThemeMode.Dark} />
+      );
+
+      expect(mockSetConfig).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -66,6 +66,20 @@ export interface SeriesConfig {
   gradient?: Partial<GradientConfig>;
 }
 
+export interface CrosshairMoveEvent {
+  x: number;
+  y: number;
+  timestamp: number;
+  active: boolean;
+  points: ReadonlyArray<Readonly<{ seriesId: string; value: number; timestamp: number }>>;
+}
+
+export interface ZoomEvent {
+  domainXMin: number;
+  domainXMax: number;
+  isZoomed: boolean;
+}
+
 export interface ChartConfig {
   theme?: ThemeMode;
   backgroundColor?: string;
@@ -85,6 +99,8 @@ export interface ChartConfig {
   zoom?: boolean;
   ariaLabel?: string;
   onStaleChange?: (event: { seriesId: string; isStale: boolean; lastDataTimestamp: number }) => void;
+  onCrosshairMove?: (event: CrosshairMoveEvent) => void;
+  onZoom?: (event: ZoomEvent) => void;
 }
 
 export interface ResolvedSeriesConfig {

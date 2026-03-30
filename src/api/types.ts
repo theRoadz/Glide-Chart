@@ -18,6 +18,8 @@ export type {
   AxisConfig,
   CrosshairConfig,
   TooltipConfig,
+  CrosshairMoveEvent,
+  ZoomEvent,
 } from '../config/types';
 
 export { ThemeMode } from '../config/types';

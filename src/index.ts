@@ -19,6 +19,8 @@ export type {
   ScaleOptions,
   Viewport,
   StaleChangeEvent,
+  CrosshairMoveEvent,
+  ZoomEvent,
 } from './api/types';
 
 export { ThemeMode } from './api/types';

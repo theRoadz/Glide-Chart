@@ -6,6 +6,8 @@ export interface GlideChartSeriesProps extends SeriesConfig {
 
 export interface GlideChartProps extends ChartConfig {
   series?: GlideChartSeriesProps[];
+  /** When true, data prop increases are pushed via addData() instead of setData(). Default: false. */
+  streaming?: boolean;
   className?: string;
   style?: React.CSSProperties;
 }
