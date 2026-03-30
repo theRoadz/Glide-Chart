@@ -39,6 +39,7 @@ export default [
         Event: 'readonly',
         PointerEvent: 'readonly',
         PointerEventInit: 'readonly',
+        WheelEvent: 'readonly',
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
         setInterval: 'readonly',

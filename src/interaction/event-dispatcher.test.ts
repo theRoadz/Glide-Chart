@@ -1,5 +1,5 @@
 import { EventDispatcher } from './event-dispatcher';
-import type { PointerState } from './types';
+import type { PointerState, WheelState } from './types';
 
 function createContainer(): HTMLElement {
   const el = document.createElement('div');
@@ -102,17 +102,18 @@ describe('EventDispatcher', () => {
     const removeSpy = vi.spyOn(container, 'removeEventListener');
     const dispatcher = new EventDispatcher(container);
 
-    // 5 listeners registered: pointermove, pointerleave, pointerdown, pointerup, pointercancel
-    expect(addSpy).toHaveBeenCalledTimes(5);
+    // 6 listeners registered: pointermove, pointerleave, pointerdown, pointerup, pointercancel, wheel
+    expect(addSpy).toHaveBeenCalledTimes(6);
 
     dispatcher.destroy();
 
-    expect(removeSpy).toHaveBeenCalledTimes(5);
+    expect(removeSpy).toHaveBeenCalledTimes(6);
     expect(removeSpy).toHaveBeenCalledWith('pointermove', expect.any(Function));
     expect(removeSpy).toHaveBeenCalledWith('pointerleave', expect.any(Function));
     expect(removeSpy).toHaveBeenCalledWith('pointerdown', expect.any(Function));
     expect(removeSpy).toHaveBeenCalledWith('pointerup', expect.any(Function));
     expect(removeSpy).toHaveBeenCalledWith('pointercancel', expect.any(Function));
+    expect(removeSpy).toHaveBeenCalledWith('wheel', expect.any(Function));
 
     // After destroy, events should not trigger subscribers
     const received: PointerState[] = [];
@@ -257,5 +258,141 @@ describe('EventDispatcher', () => {
     expect(stateRefs[0]).toBe(stateRefs[1]);
 
     dispatcher.destroy();
+  });
+
+  describe('wheel events', () => {
+    function dispatchWheel(
+      el: HTMLElement,
+      options: { offsetX?: number; offsetY?: number; deltaY?: number } = {},
+    ): WheelEvent {
+      const event = new WheelEvent('wheel', {
+        bubbles: true,
+        deltaY: options.deltaY ?? 0,
+      });
+      Object.defineProperty(event, 'offsetX', { value: options.offsetX ?? 0 });
+      Object.defineProperty(event, 'offsetY', { value: options.offsetY ?? 0 });
+      el.dispatchEvent(event);
+      return event;
+    }
+
+    it('dispatches WheelState with correct x, y, deltaY to wheel subscribers', () => {
+      const dispatcher = new EventDispatcher(container);
+      const received: WheelState[] = [];
+      dispatcher.subscribeWheel((state) => {
+        received.push({ ...state });
+      });
+
+      dispatchWheel(container, { offsetX: 100, offsetY: 200, deltaY: -120 });
+
+      expect(received).toHaveLength(1);
+      expect(received[0]).toEqual({ x: 100, y: 200, deltaY: -120 });
+
+      dispatcher.destroy();
+    });
+
+    it('multiple wheel subscribers all receive updates', () => {
+      const dispatcher = new EventDispatcher(container);
+      const results1: WheelState[] = [];
+      const results2: WheelState[] = [];
+      dispatcher.subscribeWheel((state) => results1.push({ ...state }));
+      dispatcher.subscribeWheel((state) => results2.push({ ...state }));
+
+      dispatchWheel(container, { offsetX: 50, offsetY: 60, deltaY: 100 });
+
+      expect(results1).toHaveLength(1);
+      expect(results2).toHaveLength(1);
+      expect(results1[0]!.deltaY).toBe(100);
+      expect(results2[0]!.deltaY).toBe(100);
+
+      dispatcher.destroy();
+    });
+
+    it('subscribeWheel returns unsubscribe function that removes subscriber', () => {
+      const dispatcher = new EventDispatcher(container);
+      const received: WheelState[] = [];
+      const unsub = dispatcher.subscribeWheel((state) => {
+        received.push({ ...state });
+      });
+
+      dispatchWheel(container, { deltaY: -10 });
+      expect(received).toHaveLength(1);
+
+      unsub();
+
+      dispatchWheel(container, { deltaY: -20 });
+      expect(received).toHaveLength(1);
+
+      dispatcher.destroy();
+    });
+
+    it('preventWheel() calls preventDefault on the current WheelEvent during subscriber notification', () => {
+      const dispatcher = new EventDispatcher(container);
+      let preventDefaultCalled = false;
+
+      dispatcher.subscribeWheel(() => {
+        dispatcher.preventWheel();
+      });
+
+      const event = new WheelEvent('wheel', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'offsetX', { value: 0 });
+      Object.defineProperty(event, 'offsetY', { value: 0 });
+      vi.spyOn(event, 'preventDefault').mockImplementation(() => {
+        preventDefaultCalled = true;
+      });
+      container.dispatchEvent(event);
+
+      expect(preventDefaultCalled).toBe(true);
+
+      dispatcher.destroy();
+    });
+
+    it('preventWheel() is a no-op when called outside of a wheel event', () => {
+      const dispatcher = new EventDispatcher(container);
+      // Should not throw
+      expect(() => dispatcher.preventWheel()).not.toThrow();
+      dispatcher.destroy();
+    });
+
+    it('destroy removes wheel event listener', () => {
+      const removeSpy = vi.spyOn(container, 'removeEventListener');
+      const dispatcher = new EventDispatcher(container);
+      dispatcher.destroy();
+
+      expect(removeSpy).toHaveBeenCalledWith('wheel', expect.any(Function));
+
+      // After destroy, wheel events should not trigger subscribers
+      const received: WheelState[] = [];
+      dispatcher.subscribeWheel((state) => {
+        received.push({ ...state });
+      });
+      dispatchWheel(container, { deltaY: 50 });
+      expect(received).toHaveLength(0);
+    });
+
+    it('wheel listener registered with passive: false', () => {
+      const addSpy = vi.spyOn(container, 'addEventListener');
+      const dispatcher = new EventDispatcher(container);
+
+      const wheelCall = addSpy.mock.calls.find((call) => call[0] === 'wheel');
+      expect(wheelCall).toBeDefined();
+      expect(wheelCall![2]).toEqual({ passive: false });
+
+      dispatcher.destroy();
+    });
+
+    it('reuses the same WheelState object (no allocations per event)', () => {
+      const dispatcher = new EventDispatcher(container);
+      const stateRefs: Readonly<WheelState>[] = [];
+      dispatcher.subscribeWheel((state) => {
+        stateRefs.push(state);
+      });
+
+      dispatchWheel(container, { offsetX: 1, offsetY: 2, deltaY: -10 });
+      dispatchWheel(container, { offsetX: 3, offsetY: 4, deltaY: 10 });
+
+      expect(stateRefs[0]).toBe(stateRefs[1]);
+
+      dispatcher.destroy();
+    });
   });
 });

@@ -18,6 +18,7 @@ import type { StaleChangeEvent } from '../core/stale-detector';
 import { EventDispatcher } from '../interaction/event-dispatcher';
 import { Crosshair } from '../interaction/crosshair';
 import { Tooltip } from '../interaction/tooltip';
+import { ZoomHandler } from '../interaction/zoom-handler';
 import type { PointerState, CrosshairDataSource, CrosshairSeriesData } from '../interaction/types';
 import type { GlideChartConfig } from './types';
 
@@ -77,6 +78,7 @@ export class GlideChart {
   private eventDispatcher: EventDispatcher;
   private crosshair: Crosshair;
   private tooltip: Tooltip;
+  private zoomHandler: ZoomHandler;
   private crosshairDataSource: CrosshairDataSource;
   private pointerState: PointerState = { x: 0, y: 0, active: false, pointerType: '' };
 
@@ -206,6 +208,18 @@ export class GlideChart {
       this.tooltip.update(this.pointerState, this.resolvedConfig);
     });
 
+    // 10b. Create ZoomHandler and subscribe to wheel events
+    this.zoomHandler = new ZoomHandler(
+      this.scale,
+      (layer) => this.frameScheduler.markDirty(layer),
+      () => this.getVisibleValuesInDomain(),
+      () => this.eventDispatcher.preventWheel(),
+    );
+    this.eventDispatcher.subscribeWheel((wheelState) => {
+      this.zoomHandler.handleWheel(wheelState, this.resolvedConfig);
+      this.tooltip.update(this.pointerState, this.resolvedConfig);
+    });
+
     // 11. Create StaleDetector if threshold > 0
     this._onStaleChange = config?.onStaleChange;
     if (this.resolvedConfig.staleThreshold > 0) {
@@ -288,6 +302,7 @@ export class GlideChart {
     }
     state.splineCache.computeFull();
 
+    this.zoomHandler.resetZoom();
     const scaleChanged = this.autoFitScale();
     if (scaleChanged && this.resolvedConfig.animation.enabled) {
       this.dataLayerRenderer.cancelAnimation();
@@ -320,6 +335,7 @@ export class GlideChart {
       }
     }
 
+    this.zoomHandler.resetZoom();
     this.autoFitScale();
     this.frameScheduler.markDirty(LayerType.Data);
     this.frameScheduler.markDirty(LayerType.Axis);
@@ -492,6 +508,7 @@ export class GlideChart {
     this.tooltip.destroy();
     this.tooltip = new Tooltip(this.container, this.scale, this.crosshairDataSource, this.resolvedConfig);
 
+    this.zoomHandler.resetZoom();
     this.autoFitScale();
     this.frameScheduler.markAllDirty();
   }
@@ -507,6 +524,7 @@ export class GlideChart {
     if (width === 0 || height === 0) return;
 
     this.scale.update(width, height, this.layerManager.dpr);
+    this.zoomHandler.resetZoom();
     this.autoFitScale();
     this.frameScheduler.markAllDirty();
   }
@@ -516,6 +534,7 @@ export class GlideChart {
 
     this.destroyed = true;
     this.tooltip.destroy();
+    this.zoomHandler.destroy();
     this.eventDispatcher.destroy();
     if (this.staleDetector) {
       this.staleDetector.destroy();
@@ -543,6 +562,7 @@ export class GlideChart {
     this.layerManager = null!;
     this.frameScheduler = null!;
     this.eventDispatcher = null!;
+    this.zoomHandler = null!;
     this.crosshair = null!;
     this.tooltip = null!;
     this.crosshairDataSource = null!;
@@ -660,6 +680,10 @@ export class GlideChart {
   }
 
   private autoFitScale(): boolean {
+    if (this.zoomHandler && this.zoomHandler.isZoomed) {
+      return this.autoFitYOnly();
+    }
+
     const timeWindow = this.resolvedConfig.timeWindow;
 
     if (timeWindow > 0) {
@@ -696,6 +720,26 @@ export class GlideChart {
       oldDomainY.min !== newDomainY.min ||
       oldDomainY.max !== newDomainY.max
     );
+  }
+
+  private autoFitYOnly(): boolean {
+    const oldDomainY = this.scale.domainY;
+    const values = this.getVisibleValuesInDomain();
+    this.scale.autoFitY(values);
+    const newDomainY = this.scale.domainY;
+    return oldDomainY.min !== newDomainY.min || oldDomainY.max !== newDomainY.max;
+  }
+
+  private getVisibleValuesInDomain(): number[] {
+    const { min, max } = this.scale.domainX;
+    const values: number[] = [];
+    for (const state of this.seriesMap.values()) {
+      const visiblePoints = getVisibleWindow(state.buffer, { start: min, end: max });
+      for (const point of visiblePoints) {
+        values.push(point.value);
+      }
+    }
+    return values;
   }
 
   private autoFitScaleWindowed(timeWindowSeconds: number): boolean {

@@ -19,6 +19,14 @@ export interface CrosshairDataSource {
   getSeries(): Iterable<CrosshairSeriesData>;
 }
 
+export interface WheelState {
+  x: number;
+  y: number;
+  deltaY: number;
+}
+
+export type WheelCallback = (state: Readonly<WheelState>) => void;
+
 export interface TooltipDataPoint {
   seriesId: string;
   value: number;
