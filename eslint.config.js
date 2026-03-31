@@ -45,6 +45,9 @@ export default [
         clearTimeout: 'readonly',
         setInterval: 'readonly',
         clearInterval: 'readonly',
+        console: 'readonly',
+        fetch: 'readonly',
+        Response: 'readonly',
       },
     },
     plugins: {

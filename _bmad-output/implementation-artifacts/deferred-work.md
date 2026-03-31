@@ -92,3 +92,8 @@
 - ~~**Formatter returning empty string produces silent/empty ARIA announcement**~~ — Fixed: ARIA falls back to default rendering when custom content is empty
 - ~~**Formatter returning null/undefined renders literal string "null"/"undefined"**~~ — Fixed: runtime typeof check rejects non-string returns, falls back to default
 - ~~**resultPool.slice() allocates on every pointer move, defeating pool pattern**~~ — Fixed: pre-allocated formatterView array with field-copy instead of slice+map
+
+## ~~Deferred from: code review of 7-2-html-data-attribute-configuration-and-rendering (2026-03-31)~~
+
+- ~~**No AbortController for data-src fetch — use-after-destroy risk**~~ — Fixed: added AbortController per fetch, stored in WeakMap, aborted on destroy()
+- ~~**No `destroy()` API to clean up widget instances for SPA usage**~~ — Fixed: added `GlideChart.destroy(el)` static method that aborts fetch, calls chart.destroy(), and removes from WeakMap tracking
