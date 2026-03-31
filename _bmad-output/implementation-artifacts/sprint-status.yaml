@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-27
-last_updated: 2026-03-31  # Story 6.2 done
+last_updated: 2026-03-31  # Story 7.1 done
 project: chartview
 project_key: NOKEY
 tracking_system: file-system
@@ -96,7 +96,7 @@ development_status:
   epic-6-retrospective: optional
 
   # Epic 7: Embeddable Widget & Distribution (2 stories)
-  epic-7: backlog
-  7-1-umd-widget-bundle-build: backlog
+  epic-7: in-progress
+  7-1-umd-widget-bundle-build: done
   7-2-html-data-attribute-configuration-and-rendering: backlog
   epic-7-retrospective: optional

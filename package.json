@@ -17,6 +17,9 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./widget": {
+      "default": "./dist/glide-chart.umd.js"
+    },
     "./react": {
       "import": {
         "types": "./dist/react.d.ts",
@@ -37,7 +40,8 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node scripts/build-umd.js",
+    "build:umd": "node scripts/build-umd.js",
     "dev": "tsup --watch",
     "prepublishOnly": "pnpm build",
     "test": "vitest",
@@ -74,6 +78,7 @@
     "@typescript-eslint/eslint-plugin": "^8.57.2",
     "@typescript-eslint/parser": "^8.57.2",
     "@vitest/coverage-v8": "^4.1.2",
+    "esbuild": "^0.27.4",
     "eslint": "^10.1.0",
     "jsdom": "^29.0.1",
     "prettier": "^3.8.1",
